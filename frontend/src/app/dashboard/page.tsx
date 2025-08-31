@@ -1,112 +1,151 @@
 "use client";
 
 import { useState } from "react";
-import { Home, CreditCard, PiggyBank, Banknote, Wallet, Shield, BarChart3, ListTodo } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Home,
+  List,
+  PlusCircle,
+  PieChart,
+  TrendingUp,
+  Wallet,
+  Bell,
+  Settings,
+  LogOut,
+} from "lucide-react";
 
 export default function Dashboard() {
-  const [active, setActive] = useState("dashboard");
+  const [active, setActive] = useState("Dashboard");
+  const router = useRouter();
 
-  const menu = [
-    { id: "dashboard", label: "Dashboard", icon: <Home size={20} /> },
-    { id: "accounts", label: "Accounts", icon: <Banknote size={20} /> },
-    { id: "deposits", label: "Deposits", icon: <PiggyBank size={20} /> },
-    { id: "payments", label: "Payments", icon: <Wallet size={20} /> },
-    { id: "loans", label: "Loans", icon: <CreditCard size={20} /> },
-    { id: "investments", label: "Investments", icon: <BarChart3 size={20} /> },
-    { id: "insurance", label: "Insurance", icon: <Shield size={20} /> },
-    { id: "requests", label: "Track Requests", icon: <ListTodo size={20} /> },
+  // Handle logout
+  const handleLogout = () => {
+    localStorage.removeItem("authToken");
+    router.push("/login");
+  };
+
+  // Sidebar menu items
+  const menuItems = [
+    { name: "Dashboard", icon: <Home size={20} />, path: "/dashboard" },
+    { name: "Transactions", icon: <List size={20} />, path: "/transactions" },
+    { name: "Add Transaction", icon: <PlusCircle size={20} />, path: "/add-transaction" },
+    { name: "Categories", icon: <PieChart size={20} />, path: "/categories" },
+    { name: "Budget & Insights", icon: <TrendingUp size={20} />, path: "/budget" },
+    { name: "Reports & Analytics", icon: <PieChart size={20} />, path: "/reports" },
+    { name: "Wallets", icon: <Wallet size={20} />, path: "/wallets" },
+    { name: "Notifications", icon: <Bell size={20} />, path: "/notifications" },
+    { name: "Settings", icon: <Settings size={20} />, path: "/settings" },
+    { name: "Logout", icon: <LogOut size={20} />, action: handleLogout },
   ];
 
   return (
-    <div className="flex h-screen bg-white text-gray-800">
+    <div className="flex h-screen bg-white text-gray-900">
       {/* Sidebar */}
-      <div className="w-52 bg-gradient-to-b from-yellow-500 to-yellow-700 text-white flex flex-col">
-        <div className="p-4 text-2xl font-bold border-b border-yellow-300">MyBank</div>
-        <nav className="flex-1">
-          {menu.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActive(item.id)}
-              className={`flex items-center gap-3 w-full px-4 py-3 text-sm hover:bg-yellow-600 transition 
-                ${active === item.id ? "bg-yellow-800" : ""}`}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
+      <aside className="w-64 bg-gradient-to-b from-yellow-400 to-yellow-600 text-white shadow-lg flex flex-col">
+        <div className="p-5 text-2xl font-bold border-b border-yellow-300">
+          Smart Expense Tracker
+        </div>
+        <nav className="flex-1 overflow-y-auto">
+          <ul>
+            {menuItems.map((item) => (
+              <li
+                key={item.name}
+                className={`flex items-center px-5 py-3 cursor-pointer hover:bg-yellow-500 ${
+                  active === item.name ? "bg-yellow-700" : ""
+                }`}
+                onClick={() => {
+                  setActive(item.name);
+                  if (item.action) {
+                    item.action();
+                  } else if (item.path) {
+                    router.push(item.path);
+                  }
+                }}
+              >
+                <span className="mr-3">{item.icon}</span>
+                {item.name}
+              </li>
+            ))}
+          </ul>
         </nav>
-      </div>
+      </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Topbar */}
-        <header className="flex items-center justify-between px-6 py-4 border-b bg-white shadow-sm">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-700">Hi, Dharineesh</h1>
-            <p className="text-sm text-gray-500">Last logged in: 25/08/2025 09:03 PM</p>
+      <main className="flex-1 p-6 overflow-y-auto">
+        {/* Top Section: Quick Stats */}
+        <div className="grid grid-cols-4 gap-6 mb-6">
+          <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
+            <h2 className="text-lg font-semibold">Total Balance</h2>
+            <p className="text-2xl font-bold text-yellow-700">₹ 12,560</p>
           </div>
-          <div className="flex gap-4 items-center">
-            <input
-              type="text"
-              placeholder="Search here..."
-              className="border rounded-full px-4 py-1 text-sm outline-none focus:ring-2 focus:ring-yellow-500"
-            />
-            <button className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-1 rounded-full">
-              Logout
-            </button>
+          <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
+            <h2 className="text-lg font-semibold">Spent This Month</h2>
+            <p className="text-2xl font-bold text-yellow-700">₹ 8,320</p>
           </div>
-        </header>
+          <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
+            <h2 className="text-lg font-semibold">Transactions</h2>
+            <p className="text-2xl font-bold text-yellow-700">124</p>
+          </div>
+          <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
+            <h2 className="text-lg font-semibold">Upcoming Bills</h2>
+            <p className="text-2xl font-bold text-yellow-700">₹ 2,450</p>
+          </div>
+        </div>
 
-        {/* Dashboard Cards */}
-        <main className="p-6 grid grid-cols-3 gap-6">
-          <div className="bg-gradient-to-r from-yellow-100 to-yellow-50 p-6 rounded-2xl shadow-md border">
-            <h2 className="text-lg font-semibold text-yellow-800">ACCOUNTS</h2>
-            <p className="text-sm text-gray-600 mt-1">Total Account Balance</p>
-            <p className="text-2xl font-bold mt-3 text-gray-900">₹ 6,113.00</p>
-          </div>
-
-          <div className="bg-gradient-to-r from-yellow-50 to-white p-6 rounded-2xl shadow-md border">
-            <h2 className="text-lg font-semibold text-yellow-800">DEPOSITS</h2>
-            <p className="text-sm text-gray-600 mt-1">Invest in safe and risk free FD</p>
-            <button className="mt-3 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">
-              BOOK FD
-            </button>
-          </div>
-
-          <div className="bg-gradient-to-r from-yellow-50 to-white p-6 rounded-2xl shadow-md border">
-            <h2 className="text-lg font-semibold text-yellow-800">CREDIT CARDS</h2>
-            <p className="text-sm text-gray-600 mt-1">Apply for credit cards & benefits</p>
-            <button className="mt-3 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">
-              APPLY NOW
-            </button>
-          </div>
-        </main>
-
-        {/* Pay Now Section */}
-        <section className="p-6">
-          <h3 className="text-lg font-semibold text-gray-700 mb-3">PAY NOW</h3>
-          <div className="flex gap-6 items-center">
-            <div className="flex flex-col items-center">
-              <button className="w-14 h-14 rounded-full border-2 border-yellow-500 flex items-center justify-center text-yellow-600 text-2xl">
-                +
-              </button>
-              <p className="text-sm mt-2 text-gray-700">Add New</p>
-            </div>
-            <div className="flex flex-col items-center">
-              <div className="w-14 h-14 rounded-full bg-yellow-200 flex items-center justify-center font-semibold text-gray-800">
-                MA
-              </div>
-              <p className="text-sm mt-2 text-gray-700">Magudesh</p>
-            </div>
-            <div className="flex flex-col items-center">
-              <div className="w-14 h-14 rounded-full bg-yellow-200 flex items-center justify-center font-semibold text-gray-800">
-                RG
-              </div>
-              <p className="text-sm mt-2 text-gray-700">Revathi</p>
+        {/* Middle Section: Graphs */}
+        <div className="grid grid-cols-2 gap-6 mb-6">
+          <div className="bg-white border p-5 rounded-2xl shadow">
+            <h2 className="text-lg font-semibold mb-4">Spending Overview</h2>
+            <div className="h-56 flex items-center justify-center text-gray-400">
+              [Pie Chart Placeholder]
             </div>
           </div>
-        </section>
-      </div>
+          <div className="bg-white border p-5 rounded-2xl shadow">
+            <h2 className="text-lg font-semibold mb-4">Expense Trend</h2>
+            <div className="h-56 flex items-center justify-center text-gray-400">
+              [Line/Bar Chart Placeholder]
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Section: Widgets */}
+        <div className="grid grid-cols-3 gap-6">
+          <div className="col-span-2 bg-white border p-5 rounded-2xl shadow">
+            <h2 className="text-lg font-semibold mb-4">Recent Transactions</h2>
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b">
+                  <th className="p-2">Date</th>
+                  <th className="p-2">Category</th>
+                  <th className="p-2">Amount</th>
+                  <th className="p-2">NFC ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="p-2">30 Aug</td>
+                  <td className="p-2">Food</td>
+                  <td className="p-2 text-red-600">- ₹250</td>
+                  <td className="p-2">#A123</td>
+                </tr>
+                <tr>
+                  <td className="p-2">29 Aug</td>
+                  <td className="p-2">Travel</td>
+                  <td className="p-2 text-red-600">- ₹600</td>
+                  <td className="p-2">#B981</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="bg-yellow-100 p-5 rounded-2xl shadow">
+            <h2 className="text-lg font-semibold mb-3">AI Insights</h2>
+            <p className="text-gray-700">
+              ⚠ You are overspending on Food by <span className="font-bold">15%</span> this month.
+            </p>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
