@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import {
   Home,
   List,
-  PlusCircle,
   PieChart,
   TrendingUp,
   Wallet,
   Bell,
   Settings,
+  HelpCircle,
   LogOut,
 } from "lucide-react";
 
@@ -28,13 +28,12 @@ export default function Dashboard() {
   const menuItems = [
     { name: "Dashboard", icon: <Home size={20} />, path: "/dashboard" },
     { name: "Transactions", icon: <List size={20} />, path: "/transactions" },
-    { name: "Add Transaction", icon: <PlusCircle size={20} />, path: "/add-transaction" },
-    { name: "Categories", icon: <PieChart size={20} />, path: "/categories" },
     { name: "Budget & Insights", icon: <TrendingUp size={20} />, path: "/budget" },
     { name: "Reports & Analytics", icon: <PieChart size={20} />, path: "/reports" },
     { name: "Wallets", icon: <Wallet size={20} />, path: "/wallets" },
     { name: "Notifications", icon: <Bell size={20} />, path: "/notifications" },
     { name: "Settings", icon: <Settings size={20} />, path: "/settings" },
+    { name: "Help and Support", icon: <HelpCircle size={20} />, path: "/help" },
     { name: "Logout", icon: <LogOut size={20} />, action: handleLogout },
   ];
 
