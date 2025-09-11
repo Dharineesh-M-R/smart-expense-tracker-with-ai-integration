@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 import {
   Home,
   List,
@@ -14,17 +15,54 @@ import {
   LogOut,
 } from "lucide-react";
 
+// Define transaction type
+interface Transaction {
+  id: number;
+  date: string;
+  category: string;
+  amount: number;
+  nfcId: string;
+}
+
 export default function Dashboard() {
   const [active, setActive] = useState("Dashboard");
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const router = useRouter();
 
-  // Handle logout
+  // Fetch transactions when component loads
+  useEffect(() => {
+    fetchTransactions();
+  }, []);
+
+  const fetchTransactions = async () => {
+    try {
+      const res = await axios.get<Transaction[]>("http://localhost:5000/api/dashboard");
+      setTransactions(res.data);
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+    }
+  };
+
+  // Simulate NFC Tap for testing
+  const simulateNfcTap = async () => {
+    try {
+      const newTransaction = {
+        category: "Food",
+        amount: 250,
+        nfcId: "#A123",
+      };
+      await axios.post("http://localhost:5000/api/dashboard", newTransaction);
+      fetchTransactions();
+    } catch (error) {
+      console.error("Error adding transaction:", error);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("authToken");
     router.push("/login");
   };
 
-  // Sidebar menu items
   const menuItems = [
     { name: "Dashboard", icon: <Home size={20} />, path: "/dashboard" },
     { name: "Transactions", icon: <List size={20} />, path: "/transactions" },
@@ -71,7 +109,7 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="flex-1 p-6 overflow-y-auto">
-        {/* Top Section: Quick Stats */}
+        {/* Quick Stats */}
         <div className="grid grid-cols-4 gap-6 mb-6">
           <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
             <h2 className="text-lg font-semibold">Total Balance</h2>
@@ -83,7 +121,7 @@ export default function Dashboard() {
           </div>
           <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
             <h2 className="text-lg font-semibold">Transactions</h2>
-            <p className="text-2xl font-bold text-yellow-700">124</p>
+            <p className="text-2xl font-bold text-yellow-700">{transactions.length}</p>
           </div>
           <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
             <h2 className="text-lg font-semibold">Upcoming Bills</h2>
@@ -91,26 +129,16 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Middle Section: Graphs */}
-        <div className="grid grid-cols-2 gap-6 mb-6">
-          <div className="bg-white border p-5 rounded-2xl shadow">
-            <h2 className="text-lg font-semibold mb-4">Spending Overview</h2>
-            <div className="h-56 flex items-center justify-center text-gray-400">
-              [Pie Chart Placeholder]
-            </div>
-          </div>
-          <div className="bg-white border p-5 rounded-2xl shadow">
-            <h2 className="text-lg font-semibold mb-4">Expense Trend</h2>
-            <div className="h-56 flex items-center justify-center text-gray-400">
-              [Line/Bar Chart Placeholder]
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Section: Widgets */}
+        {/* Transactions Table */}
         <div className="grid grid-cols-3 gap-6">
           <div className="col-span-2 bg-white border p-5 rounded-2xl shadow">
             <h2 className="text-lg font-semibold mb-4">Recent Transactions</h2>
+            <button
+              className="bg-yellow-500 text-white px-3 py-1 rounded mb-3"
+              onClick={simulateNfcTap}
+            >
+              Simulate NFC Tap
+            </button>
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b">
@@ -121,22 +149,19 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td className="p-2">30 Aug</td>
-                  <td className="p-2">Food</td>
-                  <td className="p-2 text-red-600">- ₹250</td>
-                  <td className="p-2">#A123</td>
-                </tr>
-                <tr>
-                  <td className="p-2">29 Aug</td>
-                  <td className="p-2">Travel</td>
-                  <td className="p-2 text-red-600">- ₹600</td>
-                  <td className="p-2">#B981</td>
-                </tr>
+                {transactions.map((tx) => (
+                  <tr key={tx.id}>
+                    <td className="p-2">{tx.date}</td>
+                    <td className="p-2">{tx.category}</td>
+                    <td className="p-2 text-red-600">- ₹{tx.amount}</td>
+                    <td className="p-2">{tx.nfcId}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
+          {/* AI Insights */}
           <div className="bg-yellow-100 p-5 rounded-2xl shadow">
             <h2 className="text-lg font-semibold mb-3">AI Insights</h2>
             <p className="text-gray-700">
