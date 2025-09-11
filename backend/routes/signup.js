@@ -6,23 +6,23 @@ const router = express.Router();
 
 // POST /api/signup
 router.post("/signup", async (req, res) => {
-  const { email, password_hash, name } = req.body;
+  const { email, password, name } = req.body;
 
   try {
     // 1. Sign up user in Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
-      password_hash,
+      password,  // ✅ Fixed: use 'password'
     });
 
     if (authError) {
       return res.status(400).json({ message: authError.message });
     }
 
-    // 2. Store extra user info in "profiles" table
+    // 2. Store extra user info in "users" table
     const { error: profileError } = await supabase.from("users").insert([
       {
-        user_id: authData.user.id, // same as Auth user ID
+        user_id: authData.user.id, // Same as Auth user ID
         name,
         email,
       },

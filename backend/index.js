@@ -1,7 +1,7 @@
-// server.js
 import express from "express";
 import cors from "cors";
-import signupRoute from "./routes/signup.js";
+import signup from "./routes/signup.js";
+import login from "./routes/login.js";
 
 const app = express();
 
@@ -10,7 +10,8 @@ app.use(cors({ origin: "http://localhost:3000", credentials: true }));
 app.use(express.json());
 
 // Routes
-app.use("/api", signupRoute);
+app.use("/api", signup);
+app.use("/api", login);
 
 // Start Server
 const PORT = 5000;

@@ -10,15 +10,20 @@ import HomeButton from "@/components/HomeButton";
 export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password_hash, setPassword_hash] = useState("");
+  const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (password_hash !== confirmPassword) {
+    if (password !== confirmPassword) {
       alert("Passwords do not match!");
+      return;
+    }
+
+    if (password.length < 6) {
+      alert("Password must be at least 6 characters!");
       return;
     }
 
@@ -28,15 +33,14 @@ export default function SignupPage() {
       const res = await fetch("http://localhost:5000/api/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password_hash }),
+        body: JSON.stringify({ name, email, password }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
         alert("Signup successful!");
-        // Optionally redirect to login
-        window.location.href = "/login";
+        window.location.href = "/login"; // Redirect to login
       } else {
         alert(data.message || "Signup failed");
       }
@@ -69,24 +73,30 @@ export default function SignupPage() {
               placeholder="Full Name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              required
             />
             <Input
               type="email"
               placeholder="Email Address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              required
             />
             <Input
               type="password"
-              placeholder="Password"
-              value={password_hash}
-              onChange={(e) => setPassword_hash(e.target.value)}
+              placeholder="Password (min 6 chars)"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              minLength={6}
+              required
             />
             <Input
               type="password"
               placeholder="Re-enter Password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              minLength={6}
+              required
             />
 
             <Button
