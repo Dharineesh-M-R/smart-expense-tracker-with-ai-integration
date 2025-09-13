@@ -8,20 +8,21 @@ router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    // Sign in with email/password
+    // Sign in with Supabase Auth
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-console.log("Supabase Login Error:", error);
 
-
-    if (error) return res.status(400).json({ message: error.message });
+    if (error) {
+      console.error("Supabase Login Error:", error);
+      return res.status(400).json({ message: error.message });
+    }
 
     return res.status(200).json({
       message: "Login successful",
-      user: data.user,
-      session: data.session, // Contains access_token for auth
+      user: data.user,        // Auth user object
+      session: data.session,  // Contains access_token
     });
   } catch (err) {
     console.error("Login error:", err);

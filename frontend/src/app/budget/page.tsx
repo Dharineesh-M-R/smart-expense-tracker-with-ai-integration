@@ -1,7 +1,18 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Legend } from "recharts";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Legend,
+} from "recharts";
 
 export default function BudgetInsightsPage() {
   // Sample category data
@@ -34,9 +45,9 @@ export default function BudgetInsightsPage() {
         </CardHeader>
         <CardContent>
           <p className="text-gray-700">
-            Based on your recent spending, you are exceeding your **Bills** budget by 20%.  
-            Consider reducing utility usage or shifting expenses to next month.  
-            You are saving well on **Food** and **Travel**, keep it up!  
+            Based on your recent spending, you are exceeding your <b>Bills</b> budget by 20%.
+            Consider reducing utility usage or shifting expenses to next month. You are saving
+            well on <b>Food</b> and <b>Travel</b>, keep it up!
           </p>
         </CardContent>
       </Card>
@@ -74,7 +85,10 @@ export default function BudgetInsightsPage() {
                   label
                 >
                   {categoryData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                    />
                   ))}
                 </Pie>
                 <Tooltip />
