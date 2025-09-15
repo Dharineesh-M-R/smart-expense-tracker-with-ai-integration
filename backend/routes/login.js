@@ -1,33 +1,31 @@
 import express from "express";
 import { supabase } from "../supabaseClient.js";
+import bcrypt from "bcrypt";
 
 const router = express.Router();
 
-// POST /api/login
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
-
-  try {
-    // Sign in with Supabase Auth
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      console.error("Supabase Login Error:", error);
-      return res.status(400).json({ message: error.message });
-    }
-
-    return res.status(200).json({
-      message: "Login successful",
-      user: data.user,        // Auth user object
-      session: data.session,  // Contains access_token
-    });
-  } catch (err) {
-    console.error("Login error:", err);
-    return res.status(500).json({ message: "Server error" });
+  const { data: users, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("email", email);
+  if (error) return res.status(500).json({ message: error.message });
+  if (!users || users.length === 0) {
+    return res.status(400).json({ message: "User not found" });
   }
+  const user = users[0];
+  if (!user.password_hash) {
+    return res.status(500).json({ message: "Password not set for this user" });
+  }
+  const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+  if (!isPasswordValid) {
+    return res.status(400).json({ message: "Incorrect password" });
+  }
+  return res.json({
+    message: "Login successful",
+    user,
+  });
 });
 
 export default router;

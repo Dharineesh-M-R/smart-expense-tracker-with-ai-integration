@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import HomeButton from "@/components/HomeButton";
+import axios from "axios";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,27 +18,18 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return alert("Enter email and password!");
-
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        localStorage.setItem("token", data.session.access_token);
-        alert("Login successful!");
-        router.push("/dashboard");
-      } else {
-        alert(data.message || "Login failed");
-      }
-    } catch (err) {
+      const API_URL =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const res = await axios.post(`${API_URL}/api/login`, { email, password });
+      const data = res.data;
+      localStorage.setItem("user", JSON.stringify(data.user));
+      alert("Login successful!");
+      router.push("/dashboard");
+    } catch (err: any) {
       console.error(err);
-      alert("Error logging in");
+      alert(err.response?.data?.message || "Error logging in");
     } finally {
       setLoading(false);
     }
@@ -52,8 +44,12 @@ export default function LoginPage() {
 
       <Card className="relative z-10 w-full max-w-md shadow-2xl rounded-2xl p-8 bg-white/90 border border-yellow-300">
         <CardContent>
-          <h1 className="text-3xl font-bold mb-2 text-yellow-600 text-center">Welcome Back</h1>
-          <p className="text-gray-700 text-center mb-6">Login to continue tracking your expenses.</p>
+          <h1 className="text-3xl font-bold mb-2 text-yellow-600 text-center">
+            Welcome Back
+          </h1>
+          <p className="text-gray-700 text-center mb-6">
+            Login to continue tracking your expenses.
+          </p>
 
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             <Input
@@ -80,10 +76,16 @@ export default function LoginPage() {
           </form>
 
           <div className="flex justify-between items-center mt-6 text-sm">
-            <Link href="/forgotpass" className="text-yellow-600 font-semibold hover:underline">
+            <Link
+              href="/forgotpass"
+              className="text-yellow-600 font-semibold hover:underline"
+            >
               Forgot Password?
             </Link>
-            <Link href="/signup" className="text-yellow-600 font-semibold hover:underline">
+            <Link
+              href="/signup"
+              className="text-yellow-600 font-semibold hover:underline"
+            >
               Create Account
             </Link>
           </div>

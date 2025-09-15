@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, FormEvent } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import HomeButton from "@/components/HomeButton";
+import axios from "axios";
 
 export default function SignupPage() {
   const [name, setName] = useState("");
@@ -14,7 +15,7 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSignup = async (e: React.FormEvent) => {
+  const handleSignup = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (password !== confirmPassword) {
@@ -30,24 +31,25 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5000/api/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+      const API_URL =process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const res = await axios.post(`${API_URL}/api/signup`, {
+        name,
+        email,
+        password,
       });
 
-      const data = await res.json();
-
-      if (res.ok) {
+      if (res.status === 200 || res.status === 201) {
         alert("Signup successful!");
-        window.location.href = "/login"; // Redirect to login
+        window.location.href = "/login"; // or use router.push("/login")
       } else {
-        alert(data.message || "Signup failed");
+        alert(res.data.message || "Signup failed");
       }
-    } catch (err) {
-      alert("Error signing up!");
-    } finally {
-      setLoading(false);
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        alert(err.response?.data?.message || "Error signing up!");
+      } else {
+        alert("Error signing up!");
+      }
     }
   };
 
@@ -110,7 +112,10 @@ export default function SignupPage() {
 
           <p className="text-gray-600 text-sm mt-6 text-center">
             Already have an account?{" "}
-            <Link href="/login" className="text-yellow-600 font-semibold hover:underline">
+            <Link
+              href="/login"
+              className="text-yellow-600 font-semibold hover:underline"
+            >
               Login
             </Link>
           </p>
