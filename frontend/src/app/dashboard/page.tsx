@@ -15,46 +15,37 @@ import {
   LogOut,
 } from "lucide-react";
 
-// Define transaction type
 interface Transaction {
-  id: number;
-  date: string;
-  category: string;
+  expense_id: string;
+  created_at: string;
   amount: number;
-  nfcId: string;
+  category_id: number;
+  description: string;
 }
+  
 
 export default function Dashboard() {
   const [active, setActive] = useState("Dashboard");
+  const [totalBalance, setTotalBalance] = useState(0);
+  const [spentThisMonth, setSpentThisMonth] = useState(0);
+  const [transactionCount, setTransactionCount] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const router = useRouter();
+  const [expenses, setExpenses] = useState([]);
 
-  // Fetch transactions when component loads
   useEffect(() => {
-    fetchTransactions();
+    fetchDashboardData();
   }, []);
 
-  const fetchTransactions = async () => {
+  const fetchDashboardData = async () => {
     try {
-      const res = await axios.get<Transaction[]>("http://localhost:5000/api/dashboard");
-      setTransactions(res.data);
+      const res = await axios.get("http://localhost:5000/api/dashboard");
+      setTotalBalance(res.data.total_balance);
+      setSpentThisMonth(res.data.spent_this_month);
+      setTransactionCount(res.data.transaction_count);
+      setTransactions(res.data.recent_transactions);
     } catch (error) {
-      console.error("Error fetching transactions:", error);
-    }
-  };
-
-  // Simulate NFC Tap for testing
-  const simulateNfcTap = async () => {
-    try {
-      const newTransaction = {
-        category: "Food",
-        amount: 250,
-        nfcId: "#A123",
-      };
-      await axios.post("http://localhost:5000/api/dashboard", newTransaction);
-      fetchTransactions();
-    } catch (error) {
-      console.error("Error adding transaction:", error);
+      console.error("Error fetching dashboard data:", error);
     }
   };
 
@@ -92,11 +83,8 @@ export default function Dashboard() {
                 }`}
                 onClick={() => {
                   setActive(item.name);
-                  if (item.action) {
-                    item.action();
-                  } else if (item.path) {
-                    router.push(item.path);
-                  }
+                  if (item.action) item.action();
+                  else if (item.path) router.push(item.path);
                 }}
               >
                 <span className="mr-3">{item.icon}</span>
@@ -113,15 +101,15 @@ export default function Dashboard() {
         <div className="grid grid-cols-4 gap-6 mb-6">
           <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
             <h2 className="text-lg font-semibold">Total Balance</h2>
-            <p className="text-2xl font-bold text-yellow-700">₹ 12,560</p>
+            <p className="text-2xl font-bold text-yellow-700">₹ {totalBalance}</p>
           </div>
           <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
             <h2 className="text-lg font-semibold">Spent This Month</h2>
-            <p className="text-2xl font-bold text-yellow-700">₹ 8,320</p>
+            <p className="text-2xl font-bold text-yellow-700">₹ {spentThisMonth}</p>
           </div>
           <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
             <h2 className="text-lg font-semibold">Transactions</h2>
-            <p className="text-2xl font-bold text-yellow-700">{transactions.length}</p>
+            <p className="text-2xl font-bold text-yellow-700">{transactionCount}</p>
           </div>
           <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
             <h2 className="text-lg font-semibold">Upcoming Bills</h2>
@@ -133,28 +121,22 @@ export default function Dashboard() {
         <div className="grid grid-cols-3 gap-6">
           <div className="col-span-2 bg-white border p-5 rounded-2xl shadow">
             <h2 className="text-lg font-semibold mb-4">Recent Transactions</h2>
-            <button
-              className="bg-yellow-500 text-white px-3 py-1 rounded mb-3"
-              onClick={simulateNfcTap}
-            >
-              Simulate NFC Tap
-            </button>
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b">
                   <th className="p-2">Date</th>
                   <th className="p-2">Category</th>
                   <th className="p-2">Amount</th>
-                  <th className="p-2">NFC ID</th>
+                  <th className="p-2">Description</th>
                 </tr>
               </thead>
               <tbody>
                 {transactions.map((tx) => (
-                  <tr key={tx.id}>
-                    <td className="p-2">{tx.date}</td>
-                    <td className="p-2">{tx.category}</td>
+                  <tr key={tx.expense_id}>
+                    <td className="p-2">{new Date(tx.created_at).toLocaleString()}</td>
+                    <td className="p-2">{tx.category_id}</td>
                     <td className="p-2 text-red-600">- ₹{tx.amount}</td>
-                    <td className="p-2">{tx.nfcId}</td>
+                    <td className="p-2">{tx.description || "-"}</td>
                   </tr>
                 ))}
               </tbody>

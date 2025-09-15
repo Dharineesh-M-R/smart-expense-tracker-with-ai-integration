@@ -5,7 +5,7 @@ const router = express.Router();
 
 // POST /api/signup
 router.post("/signup", async (req, res) => {
-  const { email, password, name } = req.body;
+  const { email, password, name, initialBalance } = req.body;
 
   try {
     // 1. Create user in Supabase Auth
@@ -25,7 +25,8 @@ router.post("/signup", async (req, res) => {
         user_id: authData.user.id, // same as Supabase Auth user ID
         name,
         email,
-        // nfc_uid will be assigned later by admin, so we skip it here
+        balance: initialBalance || 0.00, // start with provided balance or default to 0
+        // nfc_uid will be assigned later by admin
       },
     ]);
 
@@ -37,6 +38,7 @@ router.post("/signup", async (req, res) => {
     return res.status(200).json({
       message: "Signup successful! Please wait for admin to assign NFC card.",
       user_id: authData.user.id,
+      balance: initialBalance || 0.00,
     });
   } catch (err) {
     console.error("Signup error:", err);

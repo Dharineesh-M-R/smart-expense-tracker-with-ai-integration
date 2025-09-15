@@ -1,31 +1,24 @@
+// backend/routes/expenses.js
 import express from "express";
+import { supabase } from "../supabase.js";
+
 const router = express.Router();
 
-// Example Dashboard Data (replace with DB logic later)
-const transactions = [
-  { id: 1, date: "2025-09-11 10:30 AM", category: "Food", amount: 250, nfcId: "#A123" },
-  { id: 2, date: "2025-09-11 11:00 AM", category: "Travel", amount: 600, nfcId: "#B981" },
-];
+// GET /api/expenses
+router.get("/expenses", async (req, res) => {
+  try {
+    // Fetch data from Supabase table
+    const { data, error } = await supabase
+      .from("expenses")
+      .select("*");
 
-// Get all transactions
-router.get("/dashboard", (req, res) => {
-  res.json(transactions);
-});
+    if (error) throw error;
 
-// Add new transaction (from ESP32 or frontend)
-router.post("/dashboard", (req, res) => {
-  const { category, amount, nfcId } = req.body;
-  const date = new Date().toLocaleString(); // Auto timestamp
-  const newTransaction = {
-    id: transactions.length + 1,
-    date,
-    category,
-    amount,
-    nfcId,
-  };
-  transactions.push(newTransaction);
-  console.log("New Transaction:", newTransaction);
-  res.json({ success: true, transaction: newTransaction });
+    res.json(data); // Send data to Next.js frontend
+  } catch (err) {
+    console.error("Error fetching expenses:", err.message);
+    res.status(500).json({ error: "Failed to fetch expenses" });
+  }
 });
 
 export default router;
