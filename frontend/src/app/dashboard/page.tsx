@@ -14,6 +14,15 @@ import {
   HelpCircle,
   LogOut,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 
 interface Transaction {
   expense_id: string;
@@ -22,30 +31,31 @@ interface Transaction {
   category_id: number;
   description: string;
 }
-  
+
+type UserDetail = {
+  name: string;
+  email: string;
+};
 
 export default function Dashboard() {
   const [active, setActive] = useState("Dashboard");
-  const [totalBalance, setTotalBalance] = useState(0);
-  const [spentThisMonth, setSpentThisMonth] = useState(0);
-  const [transactionCount, setTransactionCount] = useState(0);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [totalBalance, setTotalBalance] = useState();
+  const [name, setName] = useState();
+  const [email, setEmail] = useState();
   const router = useRouter();
-  const [expenses, setExpenses] = useState([]);
 
   useEffect(() => {
-    fetchDashboardData();
+    fetchUserdetail(); // ✅ correctly fetch user details
   }, []);
 
-  const fetchDashboardData = async () => {
+  const fetchUserdetail = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/dashboard");
-      setTotalBalance(res.data.total_balance);
-      setSpentThisMonth(res.data.spent_this_month);
-      setTransactionCount(res.data.transaction_count);
-      setTransactions(res.data.recent_transactions);
+      const res = await axios.get("http://localhost:5000/api/userdetail");
+      setName(res.data.name);
+      setEmail(res.data.email);
+      setTotalBalance(res.data.balance); // ✅ now updates state correctly
     } catch (error) {
-      console.error("Error fetching dashboard data:", error);
+      console.error("Error fetching user details:", error);
     }
   };
 
@@ -57,8 +67,16 @@ export default function Dashboard() {
   const menuItems = [
     { name: "Dashboard", icon: <Home size={20} />, path: "/dashboard" },
     { name: "Transactions", icon: <List size={20} />, path: "/transactions" },
-    { name: "Budget & Insights", icon: <TrendingUp size={20} />, path: "/budget" },
-    { name: "Reports & Analytics", icon: <PieChart size={20} />, path: "/reports" },
+    {
+      name: "Budget & Insights",
+      icon: <TrendingUp size={20} />,
+      path: "/budget",
+    },
+    {
+      name: "Reports & Analytics",
+      icon: <PieChart size={20} />,
+      path: "/reports",
+    },
     { name: "Wallets", icon: <Wallet size={20} />, path: "/wallets" },
     { name: "Notifications", icon: <Bell size={20} />, path: "/notifications" },
     { name: "Settings", icon: <Settings size={20} />, path: "/settings" },
@@ -101,19 +119,41 @@ export default function Dashboard() {
         <div className="grid grid-cols-4 gap-6 mb-6">
           <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
             <h2 className="text-lg font-semibold">Total Balance</h2>
-            <p className="text-2xl font-bold text-yellow-700">₹ {totalBalance}</p>
+            <p className="text-2xl font-bold text-yellow-700">
+              ₹ {totalBalance}
+            </p>
           </div>
           <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
             <h2 className="text-lg font-semibold">Spent This Month</h2>
-            <p className="text-2xl font-bold text-yellow-700">₹ {spentThisMonth}</p>
+            <p className="text-2xl font-bold text-yellow-700">
+              ₹ this month Spent
+            </p>
           </div>
           <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
             <h2 className="text-lg font-semibold">Transactions</h2>
-            <p className="text-2xl font-bold text-yellow-700">{transactionCount}</p>
+            <p className="text-2xl font-bold text-yellow-700">
+              transaction count
+            </p>
           </div>
-          <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
-            <h2 className="text-lg font-semibold">Upcoming Bills</h2>
-            <p className="text-2xl font-bold text-yellow-700">₹ 2,450</p>
+        </div>
+        <div className="absolute top-0 right-0 m-4">
+          <div className="bg-yellow-100 p-3 rounded-2xl shadow text-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger>Account</DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <div>
+                  <DropdownMenuItem>{name}</DropdownMenuItem>
+                  <DropdownMenuItem>{email}</DropdownMenuItem>
+                </div>
+                <DropdownMenuItem>
+                  <Button variant="outline" onClick={handleLogout}>
+                    Logout
+                  </Button>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -131,14 +171,12 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((tx) => (
-                  <tr key={tx.expense_id}>
-                    <td className="p-2">{new Date(tx.created_at).toLocaleString()}</td>
-                    <td className="p-2">{tx.category_id}</td>
-                    <td className="p-2 text-red-600">- ₹{tx.amount}</td>
-                    <td className="p-2">{tx.description || "-"}</td>
-                  </tr>
-                ))}
+                <tr>
+                  <td>...</td>
+                  <td>...</td>
+                  <td>...</td>
+                  <td>...</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -147,7 +185,8 @@ export default function Dashboard() {
           <div className="bg-yellow-100 p-5 rounded-2xl shadow">
             <h2 className="text-lg font-semibold mb-3">AI Insights</h2>
             <p className="text-gray-700">
-              ⚠ You are overspending on Food by <span className="font-bold">15%</span> this month.
+              ⚠ You are overspending on Food by{" "}
+              <span className="font-bold">15%</span> this month.
             </p>
           </div>
         </div>
