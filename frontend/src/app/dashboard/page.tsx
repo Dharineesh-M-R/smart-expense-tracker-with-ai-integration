@@ -156,8 +156,6 @@ export default function Dashboard() {
             </DropdownMenu>
           </div>
         </div>
-
-        {/* Transactions Table */}
         <div className="grid grid-cols-3 gap-6">
           <div className="col-span-2 bg-white border p-5 rounded-2xl shadow">
             <h2 className="text-lg font-semibold mb-4">Recent Transactions</h2>
