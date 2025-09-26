@@ -32,7 +32,7 @@ export default function Dashboard() {
   const [totalBalance, setTotalBalance] = useState<number | undefined>();
   const [name, setName] = useState<string | undefined>();
   const [email, setEmail] = useState<string | undefined>();
-  const [dateTime, setDateTime] = useState<string>(""); // ✅ for dynamic date & time
+  const [dateTime, setDateTime] = useState<string>(""); // live date & time
   const router = useRouter();
 
   const handleLogout = () => {
@@ -40,34 +40,48 @@ export default function Dashboard() {
     router.push("/login");
   };
 
-  // Fetch user details on mount
-  useEffect(() => {
-    fetchUserdetail();
-  }, []);
-
-  // Live updating date and time
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setDateTime(now.toLocaleString()); // e.g., 9/24/2025, 2:30:45 PM
-    };
-
-    updateTime(); // run once immediately
-    const interval = setInterval(updateTime, 1000); // update every second
-
-    return () => clearInterval(interval); // cleanup on unmount
-  }, []);
-
+  // Fetch user details periodically
   const fetchUserdetail = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/userdetail");
+      const userId = localStorage.getItem("userId");
+      if (!userId) {
+        console.error("No userId found in localStorage");
+        return;
+      }
+
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const res = await axios.get(`${API_URL}/api/userdetail?userId=${userId}`);
+
       setName(res.data.name);
       setEmail(res.data.email);
       setTotalBalance(res.data.balance);
-    } catch (error) {
-      console.error("Error fetching user details:", error);
+    } catch (error: any) {
+      console.error("Error fetching user details:", error.response?.data || error.message);
     }
   };
+
+  const fetchtransaction = async () => {
+    
+  }
+
+  // Run fetchUserdetail initially and every 10 seconds
+  useEffect(() => {
+    fetchUserdetail(); // initial fetch
+    const interval = setInterval(fetchUserdetail, 10000); // every 10 seconds
+    return () => clearInterval(interval); // cleanup
+  }, []);
+
+  // Live updating date & time
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setDateTime(now.toLocaleString());
+    };
+
+    updateTime(); // initial call
+    const interval = setInterval(updateTime, 1000); // every second
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="flex h-screen bg-white text-gray-900">
@@ -80,21 +94,15 @@ export default function Dashboard() {
         <div className="grid grid-cols-4 gap-6 mb-6">
           <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
             <h2 className="text-lg font-semibold">Total Balance</h2>
-            <p className="text-2xl font-bold text-yellow-700">
-              ₹ {totalBalance}
-            </p>
+            <p className="text-2xl font-bold text-yellow-700">₹ {totalBalance}</p>
           </div>
           <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
             <h2 className="text-lg font-semibold">Spent This Month</h2>
-            <p className="text-2xl font-bold text-yellow-700">
-              ₹ this month Spent
-            </p>
+            <p className="text-2xl font-bold text-yellow-700">₹ this month Spent</p>
           </div>
           <div className="bg-yellow-100 p-5 rounded-2xl shadow text-center">
             <h2 className="text-lg font-semibold">Transactions</h2>
-            <p className="text-2xl font-bold text-yellow-700">
-              transaction count
-            </p>
+            <p className="text-2xl font-bold text-yellow-700">transaction count</p>
           </div>
         </div>
 
@@ -109,7 +117,7 @@ export default function Dashboard() {
                 <div>
                   <DropdownMenuItem>{name}</DropdownMenuItem>
                   <DropdownMenuItem>{email}</DropdownMenuItem>
-                  <DropdownMenuItem>{dateTime}</DropdownMenuItem> {/* ✅ live time */}
+                  <DropdownMenuItem>{dateTime}</DropdownMenuItem> {/* live time */}
                 </div>
                 <DropdownMenuItem>
                   <Button variant="outline" onClick={handleLogout}>

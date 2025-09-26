@@ -25,6 +25,7 @@ export default function LoginPage() {
       const res = await axios.post(`${API_URL}/api/login`, { email, password });
       const data = res.data;
       localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("userId", data.user.id); // Save userId separately
       alert("Login successful!");
       router.push("/dashboard");
     } catch (err: any) {
