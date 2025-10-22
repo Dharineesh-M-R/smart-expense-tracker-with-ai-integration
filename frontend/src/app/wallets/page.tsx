@@ -12,6 +12,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
+import Sidebar from "@/components/sidebar"; // ✅ Import Sidebar
 
 // ------------------ Types ------------------
 type CategoryLimit = {
@@ -28,8 +29,7 @@ type NFCDevice = {
 };
 
 // ------------------ Component ------------------
-export default function NFCDevicesPage() 
- {
+export default function NFCDevicesPage() {
   const [devices, setDevices] = useState<NFCDevice[]>([
     {
       id: 1,
@@ -96,7 +96,11 @@ export default function NFCDevicesPage()
     setSelectedCategory("");
   };
 
-  const handleAddCategory = (deviceId: number, category: string, limit: number): void => {
+  const handleAddCategory = (
+    deviceId: number,
+    category: string,
+    limit: number
+  ): void => {
     setDevices((prev) =>
       prev.map((d) =>
         d.id === deviceId
@@ -114,158 +118,191 @@ export default function NFCDevicesPage()
 
   // ------------------ Render ------------------
   return (
-    <div className="min-h-screen bg-white text-gray-800 p-6">
-      <h1 className="text-3xl font-bold mb-6 text-yellow-600">
-        📱 NFC Devices / Cards
-      </h1>
+    // ✅ Apply standard page layout
+    <div className="flex min-h-screen bg-white text-gray-800">
+      <Sidebar /> {/* ✅ Add Sidebar */}
+      
+      {/* ✅ Wrap content in main tag */}
+      <main className="flex-1 p-6">
+        <h1 className="text-3xl font-bold mb-6 text-yellow-600">
+          📱 NFC Devices / Cards
+        </h1>
 
-      {/* Add New Card */}
-      <Card className="mb-6 border-yellow-600 shadow-md">
-        <CardHeader>
-          <CardTitle className="text-yellow-600">➕ Register New NFC Card</CardTitle>
-        </CardHeader>
-        <CardContent className="grid md:grid-cols-3 gap-4">
-          <Input
-            placeholder="Card UID"
-            value={newDevice.uid}
-            onChange={(e) =>
-              setNewDevice({ ...newDevice, uid: e.target.value })
-            }
-            className="border-yellow-600"
-          />
-          <Input
-            type="number"
-            placeholder="Total Limit (₹)"
-            value={newDevice.totalLimit}
-            onChange={(e) =>
-              setNewDevice({ ...newDevice, totalLimit: e.target.value })
-            }
-            className="border-yellow-600"
-          />
-          <Button
-            className="bg-yellow-600 hover:bg-yellow-700 text-white col-span-3"
-            onClick={handleAddDevice}
-          >
-            <Plus className="mr-2 h-4 w-4" /> Add Card
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Device List */}
-      {devices.map((device) => (
-        <Card key={device.id} className="mb-6 border-yellow-600 shadow-md">
-          <CardHeader className="flex flex-row justify-between items-center">
+        {/* Add New Card */}
+        <Card className="mb-6 border-yellow-600 shadow-md">
+          <CardHeader>
             <CardTitle className="text-yellow-600">
-              UID: {device.uid} (Limit: ₹{device.totalLimit})
+              ➕ Register New NFC Card
             </CardTitle>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleDeleteDevice(device.id)}
-            >
-              <Trash2 className="h-5 w-5 text-red-600" />
-            </Button>
           </CardHeader>
-          <CardContent>
-            {/* Categories */}
-            <div className="grid md:grid-cols-3 gap-4 mb-4">
-              {device.categories.map((c, i) => (
-                <div
-                  key={i}
-                  className="border p-3 rounded-lg border-yellow-600"
-                >
-                  <h3 className="font-semibold text-yellow-700">{c.name}</h3>
-                  <p>
-                    Limit: ₹{c.limit} | Spent:{" "}
-                    <span className="text-yellow-600 font-bold">₹{c.spent}</span>
-                  </p>
-                  <Button
-                    className="mt-2 bg-yellow-600 hover:bg-yellow-700 text-white"
-                    onClick={() => handleTapCard(device)}
-                  >
-                    Tap & Spend
-                  </Button>
-                </div>
-              ))}
-            </div>
-
-            {/* Add Category */}
-            <div className="flex gap-2 mt-4">
-              <Input
-                placeholder="Category Name"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    const val = (e.target as HTMLInputElement).value;
-                    if (val) handleAddCategory(device.id, val, 1000);
-                    (e.target as HTMLInputElement).value = "";
-                  }
-                }}
-                className="border-yellow-600"
-              />
-              <Button
-                className="bg-yellow-600 hover:bg-yellow-700 text-white"
-                onClick={() => handleAddCategory(device.id, "Misc", 1000)}
-              >
-                + Add Category
-              </Button>
-            </div>
+          <CardContent className="grid md:grid-cols-3 gap-4">
+            <Input
+              placeholder="Card UID"
+              value={newDevice.uid}
+              onChange={(e) =>
+                setNewDevice({ ...newDevice, uid: e.target.value })
+              }
+              className="border-yellow-600"
+            />
+            <Input
+              type="number"
+              placeholder="Total Limit (₹)"
+              value={newDevice.totalLimit}
+              onChange={(e) =>
+                setNewDevice({ ...newDevice, totalLimit: e.target.value })
+              }
+              className="border-yellow-600"
+            />
+            <Button
+              className="bg-yellow-600 hover:bg-yellow-700 text-white md:col-span-1"
+              onClick={handleAddDevice}
+            >
+              <Plus className="mr-2 h-4 w-4" /> Add Card
+            </Button>
           </CardContent>
         </Card>
-      ))}
 
-      {/* Category Selection Modal */}
-      {selectedDevice && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <Card className="w-96 border-yellow-600 shadow-lg">
-            <CardHeader>
+        {/* Device List */}
+        {devices.map((device) => (
+          <Card key={device.id} className="mb-6 border-yellow-600 shadow-md">
+            <CardHeader className="flex flex-row justify-between items-center">
               <CardTitle className="text-yellow-600">
-                Select Category for {selectedDevice.uid}
+                UID: {device.uid} (Limit: ₹{device.totalLimit})
               </CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleDeleteDevice(device.id)}
+              >
+                <Trash2 className="h-5 w-5 text-red-600" />
+              </Button>
             </CardHeader>
             <CardContent>
-              <Select onValueChange={(val) => setSelectedCategory(val)}>
-                <SelectTrigger className="border-yellow-600 mb-4">
-                  <SelectValue placeholder="Choose Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {selectedDevice.categories.map((c, i) => (
-                    <SelectItem key={i} value={c.name}>
-                      {c.name} (Remaining: ₹{c.limit - c.spent})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Categories */}
+              <div className="grid md:grid-cols-3 gap-4 mb-4">
+                {device.categories.map((c, i) => (
+                  <div
+                    key={i}
+                    className="border p-3 rounded-lg border-yellow-600"
+                  >
+                    <h3 className="font-semibold text-yellow-700">
+                      {c.name}
+                    </h3>
+                    <p>
+                      Limit: ₹{c.limit} | Spent:{" "}
+                      <span className="text-yellow-600 font-bold">
+                        ₹{c.spent}
+                      </span>
+                    </p>
+                    <Button
+                      className="mt-2 bg-yellow-600 hover:bg-yellow-700 text-white"
+                      onClick={() => handleTapCard(device)}
+                    >
+                      Tap & Spend
+                    </Button>
+                  </div>
+                ))}
+              </div>
 
-              <Input
-                type="number"
-                placeholder="Enter Amount"
-                className="border-yellow-600 mb-4"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleSpend(Number((e.target as HTMLInputElement).value));
-                    (e.target as HTMLInputElement).value = "";
-                  }
-                }}
-              />
-
-              <div className="flex gap-2">
+              {/* Add Category */}
+              <div className="flex gap-2 mt-4">
+                <Input
+                  placeholder="Category Name"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const val = (e.target as HTMLInputElement).value;
+                      if (val) handleAddCategory(device.id, val, 1000); // Default 1000 limit
+                      (e.target as HTMLInputElement).value = "";
+                    }
+                  }}
+                  className="border-yellow-600"
+                />
                 <Button
                   className="bg-yellow-600 hover:bg-yellow-700 text-white"
-                  onClick={() => handleSpend(500)}
+                  onClick={() => {
+                    // Logic to get value from input before clicking
+                    // This is just a fallback example
+                    const input = document.querySelector<HTMLInputElement>(
+                      `input[placeholder="Category Name"]`
+                    );
+                    if (input && input.value) {
+                      handleAddCategory(device.id, input.value, 1000);
+                      input.value = "";
+                    } else {
+                      handleAddCategory(device.id, "Misc", 1000);
+                    }
+                  }}
                 >
-                  Spend ₹500
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setSelectedDevice(null)}
-                >
-                  Cancel
+                  + Add Category
                 </Button>
               </div>
             </CardContent>
           </Card>
-        </div>
-      )}
+        ))}
+
+        {/* Category Selection Modal */}
+        {selectedDevice && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="w-96 border-yellow-600 shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-yellow-600">
+                  Select Category for {selectedDevice.uid}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Select onValueChange={(val) => setSelectedCategory(val)}>
+                  <SelectTrigger className="border-yellow-600 mb-4">
+                    <SelectValue placeholder="Choose Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedDevice.categories.map((c, i) => (
+                      <SelectItem key={i} value={c.name}>
+                        {c.name} (Remaining: ₹{c.limit - c.spent})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Input
+                  type="number"
+                  placeholder="Enter Amount"
+                  className="border-yellow-600 mb-4"
+                  id="spend-amount-input" // Add an id for easy selection
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleSpend(Number((e.target as HTMLInputElement).value));
+                      (e.target as HTMLInputElement).value = "";
+                    }
+                  }}
+                />
+
+                <div className="flex gap-2">
+                  <Button
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                    onClick={() => {
+                      const input = document.getElementById(
+                        "spend-amount-input"
+                      ) as HTMLInputElement;
+                      if (input && input.value) {
+                        handleSpend(Number(input.value));
+                        input.value = "";
+                      }
+                    }}
+                  >
+                    Spend Amount
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setSelectedDevice(null)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </main>
     </div>
   );
 }

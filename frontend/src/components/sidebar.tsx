@@ -1,14 +1,16 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, usePathname } from "next/navigation"; // <--- 1. Import usePathname
+// import { useState } from "react"; // <--- 2. Remove useState
 import {
   Home, List, PieChart, TrendingUp, Wallet, Bell,
   Settings, HelpCircle, LogOut
 } from "lucide-react";
 
 export default function Sidebar() {
-  const [active, setActive] = useState("");
+  // const [active, setActive] = useState(""); // <--- 3. Remove this state
   const router = useRouter();
+  const pathname = usePathname(); // <--- 4. Get the current path
+
   const handleLogout = () => {
     localStorage.removeItem("authToken");
     router.push("/login");
@@ -29,7 +31,6 @@ export default function Sidebar() {
     },
     { name: "Wallets", icon: <Wallet size={20} />, path: "/wallets" },
     { name: "Notifications", icon: <Bell size={20} />, path: "/notifications" },
-    { name: "Settings", icon: <Settings size={20} />, path: "/settings" },
     { name: "Help and Support", icon: <HelpCircle size={20} />, path: "/help" },
     { name: "Logout", icon: <LogOut size={20} />, action: handleLogout },
   ];
@@ -40,22 +41,27 @@ export default function Sidebar() {
       </div>
       <nav className="flex-1 overflow-y-auto">
         <ul>
-          {menuItems.map((item) => (
-            <li
-              key={item.name}
-              className={`flex items-center px-5 py-3 cursor-pointer hover:bg-yellow-500 ${
-                active === item.name ? "bg-yellow-700" : ""
-              }`}
-              onClick={() => {
-                setActive(item.name);
-                if (item.action) item.action();
-                else if (item.path) router.push(item.path);
-              }}
-            >
-              <span className="mr-3">{item.icon}</span>
-              {item.name}
-            </li>
-          ))}
+          {menuItems.map((item) => {
+            // 5. Check if the current path starts with the item's path
+            const isActive = item.path && pathname.startsWith(item.path);
+
+            return (
+              <li
+                key={item.name}
+                className={`flex items-center px-5 py-3 cursor-pointer hover:bg-yellow-500 ${
+                  isActive ? "bg-yellow-700" : "" // <--- 6. Use the isActive variable here
+                }`}
+                onClick={() => {
+                  // setActive(item.name); // <--- 7. Remove this
+                  if (item.action) item.action();
+                  else if (item.path) router.push(item.path);
+                }}
+              >
+                <span className="mr-3">{item.icon}</span>
+                {item.name}
+              </li>
+            );
+          })}
         </ul>
       </nav>
     </aside>

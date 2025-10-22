@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { HelpCircle, Mail } from "lucide-react";
+import Sidebar from "@/components/sidebar"; // ✅ Import Sidebar
 
 // FAQ type
 type FAQ = {
@@ -13,7 +14,7 @@ type FAQ = {
   answer: string;
 };
 
-export default function HelpSupportPage(){
+export default function HelpSupportPage() {
   const [faqs] = useState<FAQ[]>([
     {
       question: "How do I register a new NFC card?",
@@ -35,65 +36,71 @@ export default function HelpSupportPage(){
   const [expanded, setExpanded] = useState<number | null>(null);
 
   return (
-    <div className="min-h-screen bg-white text-gray-800 p-6">
-      <h1 className="text-3xl font-bold mb-6 text-yellow-600 flex items-center gap-2">
-        <HelpCircle className="h-7 w-7 text-yellow-600" />
-        Help & Support
-      </h1>
+    // ✅ Apply standard page layout
+    <div className="flex min-h-screen bg-white text-gray-800">
+      <Sidebar /> {/* ✅ Add Sidebar */}
+      
+      {/* ✅ Wrap content in main tag */}
+      <main className="flex-1 p-6">
+        <h1 className="text-3xl font-bold mb-6 text-yellow-600 flex items-center gap-2">
+          <HelpCircle className="h-7 w-7 text-yellow-600" />
+          Help & Support
+        </h1>
 
-      {/* FAQs */}
-      <Card className="mb-6 border-yellow-600 shadow-md">
-        <CardHeader>
-          <CardTitle className="text-yellow-600">📖 User Guide / FAQs</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="space-y-4">
-            {faqs.map((faq, i) => (
-              <li key={i} className="border rounded-lg p-4 border-yellow-600">
-                <button
-                  className="w-full text-left font-semibold text-yellow-700 flex justify-between items-center"
-                  onClick={() => setExpanded(expanded === i ? null : i)}
-                >
-                  {faq.question}
-                  <span>{expanded === i ? "−" : "+"}</span>
-                </button>
-                {expanded === i && (
-                  <p className="mt-2 text-gray-700">{faq.answer}</p>
-                )}
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
+        {/* FAQs */}
+        <Card className="mb-6 border-yellow-600 shadow-md">
+          <CardHeader>
+            <CardTitle className="text-yellow-600">📖 User Guide / FAQs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-4">
+              {faqs.map((faq, i) => (
+                <li key={i} className="border rounded-lg p-4 border-yellow-600">
+                  <button
+                    className="w-full text-left font-semibold text-yellow-700 flex justify-between items-center"
+                    onClick={() => setExpanded(expanded === i ? null : i)}
+                  >
+                    {faq.question}
+                    <span>{expanded === i ? "−" : "+"}</span>
+                  </button>
+                  {expanded === i && (
+                    <p className="mt-2 text-gray-700">{faq.answer}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
 
-      {/* Contact Support */}
-      <Card className="border-yellow-600 shadow-md">
-        <CardHeader className="flex items-center gap-2">
-          <Mail className="h-6 w-6 text-yellow-600" />
-          <CardTitle className="text-yellow-600">📩 Contact Support</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4">
-            <Input
-              type="text"
-              placeholder="Your Name"
-              className="border-yellow-600"
-            />
-            <Input
-              type="email"
-              placeholder="Your Email"
-              className="border-yellow-600"
-            />
-            <Textarea
-              placeholder="Describe your issue..."
-              className="border-yellow-600"
-            />
-            <Button className="bg-yellow-600 hover:bg-yellow-700 text-white">
-              Send Message
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+        {/* Contact Support */}
+        <Card className="border-yellow-600 shadow-md">
+          <CardHeader className="flex flex-row items-center gap-2"> {/* ✅ Changed to flex-row */}
+            <Mail className="h-6 w-6 text-yellow-600" />
+            <CardTitle className="text-yellow-600">📩 Contact Support</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4">
+              <Input
+                type="text"
+                placeholder="Your Name"
+                className="border-yellow-600"
+              />
+              <Input
+                type="email"
+                placeholder="Your Email"
+                className="border-yellow-600"
+              />
+              <Textarea
+                placeholder="Describe your issue..."
+                className="border-yellow-600"
+              />
+              <Button className="bg-yellow-600 hover:bg-yellow-700 text-white">
+                Send Message
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </main>
     </div>
   );
 }
