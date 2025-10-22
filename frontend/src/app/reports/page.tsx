@@ -20,7 +20,6 @@ import Sidebar from "@/components/sidebar";
 import axios from "axios";
 
 // ------------------ Types ------------------
-// Type to match your database schema
 type Transaction = {
   transaction_id: string;
   user_id: string;
@@ -37,35 +36,63 @@ export default function ReportsExportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 1. Fetch all transactions on load
+  // ✅ 1. Fetch all transactions on load and poll every second
   useEffect(() => {
-    const fetchTransactions = async () => {
-      setLoading(true);
-      setError(null);
+    let isMounted = true;
+    let timerId: NodeJS.Timeout;
+
+    const fetchTransactions = async (isInitialLoad = false) => {
+      // Only show the main "Loading..." message on the first load
+      if (isInitialLoad) {
+        setLoading(true);
+        setError(null);
+      }
+
       const userId = localStorage.getItem("userId");
 
       if (!userId) {
-        setError("You must be logged in to view reports.");
-        setLoading(false);
-        return;
+        if (isMounted) {
+          setError("You must be logged in to view reports.");
+          setLoading(false);
+        }
+        return; // Stop polling if user is logged out
       }
 
       try {
         const API_URL =
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-        // Using the same endpoint as the transactions page
         const res = await axios.get(`${API_URL}/api/transactions/${userId}`);
-        setAllTransactions(res.data);
+        
+        if (isMounted) {
+          setAllTransactions(res.data);
+          // Clear any previous error on a successful refresh
+          setError(null);
+        }
       } catch (err: any) {
         console.error(err);
-        setError(err.response?.data?.message || "Failed to fetch transactions");
+        if (isMounted) {
+          setError(err.response?.data?.message || "Failed to fetch transactions");
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          if (isInitialLoad) {
+            setLoading(false);
+          }
+          // ✅ Schedule the next fetch 1 second after this one completes
+          timerId = setTimeout(() => fetchTransactions(false), 1000);
+        }
       }
     };
 
-    fetchTransactions();
-  }, []);
+    // Trigger the initial fetch
+    fetchTransactions(true);
+
+    // ✅ Cleanup function: runs when the component unmounts
+    return () => {
+      isMounted = false; // Prevent state updates on an unmounted component
+      clearTimeout(timerId); // Stop the polling loop
+    };
+  }, []); // Empty dependency array means this runs once on mount
 
   // 2. Memoize calculations for expenses
   const expenses = useMemo(
@@ -126,7 +153,7 @@ export default function ReportsExportPage() {
           "",
         ],
       ],
-      footStyles: { fontStyle: "bold", fillColor: [255, 235, 153] } // Yellow footer
+      footStyles: { fontStyle: "bold", fillColor: [255, 235, 153] }, // Yellow footer
     });
 
     doc.save("expense_report.pdf");
@@ -175,7 +202,6 @@ export default function ReportsExportPage() {
         {/* --- Optimized Grid Layout --- */}
         {!loading && !error && expenses.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
             {/* Card 1: Expense Log */}
             <Card className="border-yellow-600 shadow-md">
               <CardHeader>

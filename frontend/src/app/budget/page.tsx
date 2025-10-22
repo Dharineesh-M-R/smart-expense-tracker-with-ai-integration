@@ -1,5 +1,3 @@
-// budget/page.tsx (Charts Removed)
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -13,8 +11,6 @@ type CategoryData = {
   value: number;
 };
 
-// Note: WeeklyData type is no longer used, but we'll leave it
-// in case the backend still sends it.
 type WeeklyData = {
   week: string;
   amount: number;
@@ -23,22 +19,30 @@ type WeeklyData = {
 export default function BudgetInsightsPage() {
   // Set up state for data, loading, and errors
   const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
-  // We still fetch weekly data, just not display it in a chart
   const [weeklyData, setWeeklyData] = useState<WeeklyData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch data on component mount
+  // ✅ Fetch data on component mount and poll every second
   useEffect(() => {
-    const fetchBudgetData = async () => {
-      setLoading(true);
-      setError(null);
+    let isMounted = true;
+    let timerId: NodeJS.Timeout;
+
+    const fetchBudgetData = async (isInitialLoad = false) => {
+      // Only show the main "Loading..." message on the first load
+      if (isInitialLoad) {
+        setLoading(true);
+        setError(null);
+      }
+
       const userId = localStorage.getItem("userId");
 
       if (!userId) {
-        setError("You must be logged in to view insights.");
-        setLoading(false);
-        return;
+        if (isMounted) {
+          setError("You must be logged in to view insights.");
+          setLoading(false);
+        }
+        return; // Stop polling if user is logged out
       }
 
       try {
@@ -46,18 +50,37 @@ export default function BudgetInsightsPage() {
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
         const res = await axios.get(`${API_URL}/api/budget/${userId}`);
 
-        setCategoryData(res.data.categoryTotals || []);
-        setWeeklyData(res.data.weeklyTotals || []);
+        if (isMounted) {
+          setCategoryData(res.data.categoryTotals || []);
+          setWeeklyData(res.data.weeklyTotals || []);
+          // Clear any previous error on a successful refresh
+          setError(null);
+        }
       } catch (err: any) {
         console.error(err);
-        setError(err.response?.data?.message || "Failed to fetch budget data");
+        if (isMounted) {
+          setError(err.response?.data?.message || "Failed to fetch budget data");
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          if (isInitialLoad) {
+            setLoading(false);
+          }
+          // ✅ Schedule the next fetch 1 second after this one completes
+          timerId = setTimeout(() => fetchBudgetData(false), 1000);
+        }
       }
     };
 
-    fetchBudgetData();
-  }, []);
+    // Trigger the initial fetch
+    fetchBudgetData(true);
+
+    // ✅ Cleanup function: runs when the component unmounts
+    return () => {
+      isMounted = false; // Prevent state updates on an unmounted component
+      clearTimeout(timerId); // Stop the polling loop
+    };
+  }, []); // Empty dependency array means this runs once on mount
 
   return (
     <div className="flex min-h-screen bg-white text-gray-800">
@@ -67,7 +90,7 @@ export default function BudgetInsightsPage() {
           📊 Budget & Insights
         </h1>
 
-        {/* AI Recommendations (Still hardcoded, you can enhance this later) */}
+        {/* AI Recommendations */}
         <Card className="mb-6 border-yellow-600 shadow-md">
           <CardHeader>
             <CardTitle className="text-yellow-600">
@@ -116,9 +139,8 @@ export default function BudgetInsightsPage() {
                 ))}
               </div>
             )}
-            
+
             {/* Charts Section has been removed */}
-            
           </>
         )}
       </main>
