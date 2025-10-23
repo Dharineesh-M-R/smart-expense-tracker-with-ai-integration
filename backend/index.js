@@ -8,6 +8,7 @@ import login from "./routes/login.js";
 import dashboard from "./routes/dashboard.js";
 import transactions from "./routes/transactions.js"; // From previous step
 import budget from "./routes/budget.js"; // ✅ Import the new budget route
+import wallet from "./routes/wallet.js"; // ✅ Import the new budget route
 
 dotenv.config();
 const app = express();
@@ -23,6 +24,7 @@ app.use("/api", login);
 app.use("/api", dashboard);
 app.use("/api", transactions); // From previous step
 app.use("/api", budget); // ✅ Use the new budget route
+app.use("/api", wallet); // ✅ Use the new budget route
 
 // Start server
 app.listen(PORT, () => {
