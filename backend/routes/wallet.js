@@ -1,129 +1,60 @@
 import express from "express";
-import { supabase } from "../supabaseClient.js"; // adjust path if needed
+import { supabase } from "../supabaseClient.js"; // Ensure this path is correct
 
 const router = express.Router();
 
 /**
- * 🧠 GET /api/wallet/:userId
- * Fetch all cards, categories, and limits for a specific user.
- * Calls the `get_user_wallet` SQL function in Supabase.
- */
-router.get("/wallet/:userId", async (req, res) => {
-  const { userId } = req.params;
+ * @route   GET /api/wallet
+ * @desc    Get all wallet cards for a logged-in user
+ * @access  Private (requires userId)
+ */
+router.get("/wallet", async (req, res) => {
+  // Get the userId from the query parameters.
+  // The frontend will send this from localStorage.
+  const { userId } = req.query;
 
-  try {
-    // ✅ This correctly calls your SQL function, which is the
-    //    efficient way to gather this complex, aggregated data.
-    const { data, error } = await supabase.rpc("get_user_wallet", {
-      p_user_id: userId,
-    });
+  if (!userId) {
+    return res.status(401).json({ message: "User ID is required" });
+  }
 
-    if (error) {
-      console.error("Supabase RPC error:", error.message);
-      return res.status(500).json({ message: error.message });
-    }
+  try {
+    // 1. Fetch all cards from the 'card' table that match the user_id
+    const { data: cards, error: cardsError } = await supabase
+      .from("card")
+      .select("card_id, nfc_uid, total_limit") // Select only the fields you need
+      .eq("user_id", userId);
 
-    // ✅ Correctly mapping snake_case (total_limit) from the DB
-    //    to camelCase (totalLimit) for the frontend.
-    const formattedData = data.map((row) => ({
-      ...row,
-      totalLimit: row.total_limit,
-      total_limit: undefined,
-    }));
+    if (cardsError) throw cardsError;
 
-    res.json(formattedData);
-  } catch (err) {
-    console.error("Server error:", err);
-    res.status(500).json({ message: err.message || "Server error" });
-  }
-});
+    if (!cards || cards.length === 0) {
+      return res.status(200).json([]); // No cards found, return an empty array
+    }
 
-/**
- * 💰 PUT /api/wallet/limit
- * Update a category limit for a specific user and card.
- */
-router.put("/wallet/limit", async (req, res) => {
-  const { userId, cardId, categoryId, newLimit } = req.body;
+    // 2. Map the data to match the frontend's 'NFCDevice' type
+    //    - 'nfc_uid' from DB -> 'uid' in frontend
+    //    - 'total_limit' from DB -> 'totalLimit' in frontend
+    //
+    // NOTE: Your 'card' table doesn't contain category information.
+    // We are returning an empty 'categories' array for now.
+    // Your frontend code will correctly render this as a card with no categories.
+    // To add categories, you would need additional database tables.
+    const walletData = cards.map((card) => ({
+      card_id: card.card_id,
+      uid: card.nfc_uid,
+      totalLimit: card.total_limit,
+      categories: [], // Sending empty array as category data isn't in 'card' table
+    }));
 
-  // 🧩 1. Validate input
-  if (!userId || !cardId || !categoryId || newLimit === undefined) {
-    return res.status(400).json({ message: "Missing required fields." });
-  }
-  const newLimitNum = Number(newLimit);
-  if (isNaN(newLimitNum) || newLimitNum < 0) {
-    return res.status(400).json({
-      message: "Please enter a valid positive number.",
-    });
-  }
+    // 3. Send the formatted data back to the frontend
+    res.status(200).json(walletData);
 
-  try {
-    // ✅ This is critical and CORRECT for case-sensitive table names.
-    const tableName = '"Limit"';
-
-    // 2️⃣ Fetch the total card limit
-    //    We query the 'card' table using the user_id to ensure
-    //    the user owns this card.
-    const { data: cardData, error: cardError } = await supabase
-      .from("card")
-      .select("total_limit")
-      .eq("user_id", userId)
-      .eq("card_id", cardId)
-      .single();
-
-    if (cardError || !cardData) {
-      return res.status(404).json({ message: "Card not found." });
-    }
-    const totalLimit = Number(cardData.total_limit);
-
-    // 3️⃣ Fetch all OTHER category limits for this card
-    const { data: existingLimits, error: fetchError } = await supabase
-      .from(tableName)
-      .select("category_id, limit")
-      .eq("user_id", userId)
-      .eq("card_id", cardId);
-
-    if (fetchError) throw fetchError;
-
-    // 4️⃣ Server-side validation: Check against total card limit
-    const otherLimitsSum = existingLimits
-      .filter((l) => l.category_id !== categoryId) // Exclude the one we're updating
-      .reduce((sum, l) => sum + Number(l.limit), 0);
-
-    const totalAfterUpdate = otherLimitsSum + newLimitNum;
-
-    // ✅ This is the most important server-side check, and it's correct.
-    if (totalAfterUpdate > totalLimit) {
-      return res.status(400).json({
-        message: `Total category limits (₹${totalAfterUpdate}) cannot exceed card total limit (₹${totalLimit}).`,
-      });
-    }
-
-    // 5️⃣ Update the limit
-    //    The query is correctly scoped to update only the exact
-    //    record matching all three IDs.
-    const { data: updatedData, error: updateError } = await supabase
-      .from(tableName)
-      .update({ limit: newLimitNum })
-      .eq("user_id", userId)
-      .eq("card_id", cardId)
-      .eq("category_id", categoryId)
-      .select();
-
-    if (updateError) throw updateError;
-    if (!updatedData || updatedData.length === 0) {
-      return res
-        .status(404)
-        .json({ message: "Limit entry not found to update." });
-    }
-
-    res.json({
-      message: "Limit updated successfully.",
-      limit: updatedData[0],
-    });
-  } catch (err) {
-    console.error("Server error:", err);
-    res.status(500).json({ message: err.message || "Server error" });
-  }
+  } catch (error) {
+    console.error("Error fetching wallet data:", error.message);
+    res.status(500).json({ 
+      message: "Error fetching wallet data", 
+      error: error.message 
+    });
+  }
 });
 
 export default router;

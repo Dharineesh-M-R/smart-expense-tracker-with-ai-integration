@@ -77,7 +77,12 @@ export default function WalletPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const res = await axios.get(`${API_URL}/api/wallet/${userId}`);
+        // --- UPDATED API CALL ---
+        // Changed from a route parameter (/${userId}) to a query parameter
+        // to match your backend's (req.query)
+        const res = await axios.get(`${API_URL}/api/wallet`, {
+          params: { userId: userId },
+        });
         setDevices(res.data);
       } catch (err: any) {
         console.error(err);
@@ -130,7 +135,9 @@ export default function WalletPage() {
 
     if (otherCategoriesLimit + newLimit > device.totalLimit) {
       setModalError(
-        `Total category limits (₹${otherCategoriesLimit + newLimit}) cannot exceed the device's total limit (₹${device.totalLimit}).`
+        `Total category limits (₹${
+          otherCategoriesLimit + newLimit
+        }) cannot exceed the device's total limit (₹${device.totalLimit}).`
       );
       return;
     }
@@ -211,6 +218,7 @@ export default function WalletPage() {
             </Card>
           ) : (
             devices.map((device) => {
+              // Since your backend sends categories: [], these will be 0
               const totalSpent = device.categories.reduce((acc, c) => acc + c.spent, 0);
               const totalAllocated = device.categories.reduce((acc, c) => acc + c.limit, 0);
               return (
@@ -228,7 +236,7 @@ export default function WalletPage() {
                         </span>
                       </div>
                       <Progress
-                        value={(totalSpent / device.totalLimit) * 100}
+                        value={device.totalLimit > 0 ? (totalSpent / device.totalLimit) * 100 : 0}
                         className={
                           totalSpent > device.totalLimit ? "[&>*]:bg-destructive" : ""
                         }
@@ -237,40 +245,47 @@ export default function WalletPage() {
                   </CardHeader>
                   <CardContent>
                     <h3 className="text-lg font-semibold mb-4">Categories</h3>
-                    <div className="grid md:grid-cols-3 gap-4">
-                      {device.categories.map((c) => (
-                        <div
-                          key={c.category_id}
-                          className="border rounded-lg p-4 flex flex-col justify-between space-y-3"
-                        >
-                          <div>
-                            <div className="flex justify-between items-center mb-2">
-                              <h4 className="font-semibold">{c.name}</h4>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => handleOpenSetLimitModal(device, c)}
-                              >
-                                <Settings className="h-4 w-4" />
-                              </Button>
+                    {/* This section will be empty as categories: [] is received */}
+                    {device.categories.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                            No categories assigned to this card.
+                        </p>
+                    ) : (
+                        <div className="grid md:grid-cols-3 gap-4">
+                        {device.categories.map((c) => (
+                            <div
+                            key={c.category_id}
+                            className="border rounded-lg p-4 flex flex-col justify-between space-y-3"
+                            >
+                            <div>
+                                <div className="flex justify-between items-center mb-2">
+                                <h4 className="font-semibold">{c.name}</h4>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => handleOpenSetLimitModal(device, c)}
+                                >
+                                    <Settings className="h-4 w-4" />
+                                </Button>
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                Spent:{" "}
+                                <span className="font-bold text-foreground">₹{c.spent}</span> / ₹
+                                {c.limit}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                Remaining: ₹{c.limit - c.spent}
+                                </div>
                             </div>
-                            <div className="text-sm text-muted-foreground">
-                              Spent:{" "}
-                              <span className="font-bold text-foreground">₹{c.spent}</span> / ₹
-                              {c.limit}
+                            <Progress
+                                value={c.limit > 0 ? (c.spent / c.limit) * 100 : 0}
+                                className={c.spent > c.limit ? "[&>*]:bg-destructive" : ""}
+                            />
                             </div>
-                            <div className="text-sm text-muted-foreground">
-                              Remaining: ₹{c.limit - c.spent}
-                            </div>
-                          </div>
-                          <Progress
-                            value={c.limit > 0 ? (c.spent / c.limit) * 100 : 0}
-                            className={c.spent > c.limit ? "[&>*]:bg-destructive" : ""}
-                          />
+                        ))}
                         </div>
-                      ))}
-                    </div>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -278,6 +293,8 @@ export default function WalletPage() {
           )}
         </div>
 
+        {/* This Dialog remains functional but won't be triggered
+             until the backend sends categories with data */}
         <Dialog open={isModalOpen} onOpenChange={handleCloseModal}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
