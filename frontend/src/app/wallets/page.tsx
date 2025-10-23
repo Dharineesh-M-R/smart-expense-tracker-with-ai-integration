@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import axios from "axios";
 import {
   Card,
@@ -9,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import Sidebar from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,7 +23,6 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Settings, AlertCircle, Loader2 } from "lucide-react";
-import Sidebar from "@/components/sidebar";
 
 // ------------------ Types ------------------
 type CategoryLimit = {
@@ -46,8 +45,8 @@ export default function WalletPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const router = useRouter();
 
+  // State for Category Limit Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [selectedItem, setSelectedItem] = useState<{
@@ -56,6 +55,16 @@ export default function WalletPage() {
   } | null>(null);
   const [newLimitInput, setNewLimitInput] = useState("");
   const [modalError, setModalError] = useState<string | null>(null);
+
+  // --- NEW --- State for Total Limit Modal
+  const [isTotalLimitModalOpen, setIsTotalLimitModalOpen] = useState(false);
+  const [isUpdatingTotalLimit, setIsUpdatingTotalLimit] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<NFCDevice | null>(null);
+  const [newTotalLimitInput, setNewTotalLimitInput] = useState("");
+  const [totalLimitModalError, setTotalLimitModalError] = useState<string | null>(
+    null
+  );
+  // --- END NEW ---
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -66,9 +75,9 @@ export default function WalletPage() {
       setUserId(storedUserId);
     } else {
       console.log("No user ID found, redirecting to login.");
-      router.push("/login");
+      window.location.href = "/login";
     }
-  }, [router]);
+  }, []);
 
   // Fetch wallet data
   useEffect(() => {
@@ -77,9 +86,6 @@ export default function WalletPage() {
       setIsLoading(true);
       setError(null);
       try {
-        // --- UPDATED API CALL ---
-        // Changed from a route parameter (/${userId}) to a query parameter
-        // to match your backend's (req.query)
         const res = await axios.get(`${API_URL}/api/wallet`, {
           params: { userId: userId },
         });
@@ -94,8 +100,11 @@ export default function WalletPage() {
     fetchDevices();
   }, [userId, API_URL]);
 
-  // ------------------ Handlers ------------------
-  const handleOpenSetLimitModal = (device: NFCDevice, category: CategoryLimit) => {
+  // ------------------ Handlers for Category Limit ------------------
+  const handleOpenSetLimitModal = (
+    device: NFCDevice,
+    category: CategoryLimit
+  ) => {
     setSelectedItem({ device, category });
     setNewLimitInput(String(category.limit));
     setModalError(null);
@@ -129,7 +138,8 @@ export default function WalletPage() {
     }
 
     const otherCategoriesLimit = device.categories.reduce(
-      (acc, cat) => (cat.name !== category.name ? acc + cat.limit : acc),
+      (acc, cat) =>
+        cat.category_id !== category.category_id ? acc + cat.limit : acc,
       0
     );
 
@@ -176,11 +186,86 @@ export default function WalletPage() {
     }
   };
 
+  // ------------------ NEW: Handlers for Total Limit ------------------
+  const handleOpenTotalLimitModal = (device: NFCDevice) => {
+    setSelectedCard(device);
+    setNewTotalLimitInput(String(device.totalLimit));
+    setTotalLimitModalError(null);
+    setIsTotalLimitModalOpen(true);
+  };
+
+  const handleCloseTotalLimitModal = () => {
+    if (isUpdatingTotalLimit) return;
+    setIsTotalLimitModalOpen(false);
+    setSelectedCard(null);
+    setNewTotalLimitInput("");
+    setTotalLimitModalError(null);
+  };
+
+  const handleConfirmSetTotalLimit = async () => {
+    if (
+      !selectedCard ||
+      newTotalLimitInput === "" ||
+      !userId ||
+      isUpdatingTotalLimit
+    )
+      return;
+
+    const newTotalLimit = Number(newTotalLimitInput);
+    setTotalLimitModalError(null);
+
+    if (isNaN(newTotalLimit) || newTotalLimit < 0) {
+      setTotalLimitModalError("Please enter a valid positive number.");
+      return;
+    }
+
+    // Frontend check to provide instant feedback
+    const totalAllocated = selectedCard.categories.reduce(
+      (acc, c) => acc + c.limit,
+      0
+    );
+
+    if (newTotalLimit < totalAllocated) {
+      setTotalLimitModalError(
+        `New total limit (₹${newTotalLimit}) cannot be less than the amount already allocated to categories (₹${totalAllocated}).`
+      );
+      return;
+    }
+
+    setIsUpdatingTotalLimit(true);
+    try {
+      // Call the new backend endpoint
+      await axios.put(`${API_URL}/api/wallet/total-limit`, {
+        userId,
+        cardId: selectedCard.card_id,
+        newTotalLimit: newTotalLimit,
+      });
+
+      // Update state locally
+      setDevices((prev) =>
+        prev.map((d) =>
+          d.card_id === selectedCard.card_id
+            ? { ...d, totalLimit: newTotalLimit }
+            : d
+        )
+      );
+      handleCloseTotalLimitModal();
+    } catch (err: any) {
+      console.error(err);
+      setTotalLimitModalError(
+        err.response?.data?.message ||
+          "Failed to update total limit. Please try again."
+      );
+    } finally {
+      setIsUpdatingTotalLimit(false);
+    }
+  };
+  // ------------------ END NEW ------------------
+
   // ------------------ Render ------------------
   if (isLoading) {
     return (
       <div className="flex min-h-screen bg-background text-foreground">
-        <Sidebar />
         <main className="flex-1 p-6 lg:p-8 flex items-center justify-center">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
         </main>
@@ -218,15 +303,37 @@ export default function WalletPage() {
             </Card>
           ) : (
             devices.map((device) => {
-              // Since your backend sends categories: [], these will be 0
-              const totalSpent = device.categories.reduce((acc, c) => acc + c.spent, 0);
-              const totalAllocated = device.categories.reduce((acc, c) => acc + c.limit, 0);
+              const totalSpent = device.categories.reduce(
+                (acc, c) => acc + c.spent,
+                0
+              );
+              const totalAllocated = device.categories.reduce(
+                (acc, c) => acc + c.limit,
+                0
+              );
               return (
                 <Card key={device.card_id} className="shadow-md">
                   <CardHeader>
-                    <CardTitle className="text-xl">UID: {device.uid}</CardTitle>
+                    {/* --- MODIFIED: Added flex wrapper and Settings button --- */}
+                    <div className="flex justify-between items-center">
+                      <CardTitle className="text-xl">
+                        UID: {device.uid}
+                      </CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleOpenTotalLimitModal(device)}
+                        disabled={isUpdatingTotalLimit}
+                      >
+                        <Settings className="h-4 w-4" />
+                        <span className="sr-only">Set Total Limit</span>
+                      </Button>
+                    </div>
+                    {/* --- END MODIFICATION --- */}
                     <CardDescription>
-                      Total Limit: ₹{device.totalLimit} (Allocated: ₹{totalAllocated})
+                      Total Limit: ₹{device.totalLimit} (Allocated: ₹
+                      {totalAllocated})
                     </CardDescription>
                     <div className="pt-2">
                       <div className="flex justify-between text-sm text-muted-foreground mb-1">
@@ -236,55 +343,73 @@ export default function WalletPage() {
                         </span>
                       </div>
                       <Progress
-                        value={device.totalLimit > 0 ? (totalSpent / device.totalLimit) * 100 : 0}
+                        value={
+                          device.totalLimit > 0
+                            ? (totalSpent / device.totalLimit) * 100
+                            : 0
+                        }
                         className={
-                          totalSpent > device.totalLimit ? "[&>*]:bg-destructive" : ""
+                          totalSpent > device.totalLimit
+                            ? "[&>*]:bg-destructive"
+                            : ""
                         }
                       />
                     </div>
                   </CardHeader>
                   <CardContent>
                     <h3 className="text-lg font-semibold mb-4">Categories</h3>
-                    {/* This section will be empty as categories: [] is received */}
                     {device.categories.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                            No categories assigned to this card.
-                        </p>
+                      <p className="text-sm text-muted-foreground">
+                        No categories assigned to this card.
+                      </p>
                     ) : (
-                        <div className="grid md:grid-cols-3 gap-4">
+                      <div className="grid md:grid-cols-3 gap-4">
                         {device.categories.map((c) => (
-                            <div
+                          <div
                             key={c.category_id}
                             className="border rounded-lg p-4 flex flex-col justify-between space-y-3"
-                            >
+                          >
                             <div>
-                                <div className="flex justify-between items-center mb-2">
+                              <div className="flex justify-between items-center mb-2">
                                 <h4 className="font-semibold">{c.name}</h4>
                                 <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => handleOpenSetLimitModal(device, c)}
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() =>
+                                    handleOpenSetLimitModal(device, c)
+                                  }
                                 >
-                                    <Settings className="h-4 w-4" />
+                                  <Settings className="h-4 w-4" />
                                 </Button>
-                                </div>
-                                <div className="text-sm text-muted-foreground">
+                              </div>
+                              <div className="text-sm text-muted-foreground">
                                 Spent:{" "}
-                                <span className="font-bold text-foreground">₹{c.spent}</span> / ₹
+                                <span
+                                  className={`font-bold ${
+                                    c.spent > c.limit
+                                      ? "text-destructive"
+                                      : "text-foreground"
+                                  }`}
+                                >
+                                  ₹{c.spent}
+                                </span>{" "}
+                                / ₹
                                 {c.limit}
-                                </div>
-                                <div className="text-sm text-muted-foreground">
+                              </div>
+                              <div className="text-sm text-muted-foreground">
                                 Remaining: ₹{c.limit - c.spent}
-                                </div>
+                              </div>
                             </div>
                             <Progress
-                                value={c.limit > 0 ? (c.spent / c.limit) * 100 : 0}
-                                className={c.spent > c.limit ? "[&>*]:bg-destructive" : ""}
+                              value={c.limit > 0 ? (c.spent / c.limit) * 100 : 0}
+                              className={
+                                c.spent > c.limit ? "[&>*]:bg-destructive" : ""
+                              }
                             />
-                            </div>
+                          </div>
                         ))}
-                        </div>
+                      </div>
                     )}
                   </CardContent>
                 </Card>
@@ -293,8 +418,7 @@ export default function WalletPage() {
           )}
         </div>
 
-        {/* This Dialog remains functional but won't be triggered
-             until the backend sends categories with data */}
+        {/* This is your existing modal for CATEGORY limits */}
         <Dialog open={isModalOpen} onOpenChange={handleCloseModal}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
@@ -302,11 +426,10 @@ export default function WalletPage() {
                 Set Limit for {selectedItem?.category.name}
               </DialogTitle>
               <DialogDescription>
-                On device {selectedItem?.device.uid}. The total of all category limits
-                cannot exceed ₹{selectedItem?.device.totalLimit}.
+                On device {selectedItem?.device.uid}. The total of all category
+                limits cannot exceed ₹{selectedItem?.device.totalLimit}.
               </DialogDescription>
             </DialogHeader>
-
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="limit" className="text-right">
@@ -332,9 +455,12 @@ export default function WalletPage() {
                 </Alert>
               )}
             </div>
-
             <DialogFooter>
-              <Button variant="outline" onClick={handleCloseModal} disabled={isUpdating}>
+              <Button
+                variant="outline"
+                onClick={handleCloseModal}
+                disabled={isUpdating}
+              >
                 Cancel
               </Button>
               <Button onClick={handleConfirmSetLimit} disabled={isUpdating}>
@@ -344,6 +470,70 @@ export default function WalletPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* --- NEW: Modal for TOTAL limit --- */}
+        <Dialog
+          open={isTotalLimitModalOpen}
+          onOpenChange={handleCloseTotalLimitModal}
+        >
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>
+                Set Total Limit for {selectedCard?.uid}
+              </DialogTitle>
+              <DialogDescription>
+                Set the new total spending limit for this card. This limit cannot
+                be lower than the sum of all category limits (₹
+                {selectedCard?.categories.reduce((acc, c) => acc + c.limit, 0)}
+                ).
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="total-limit" className="text-right">
+                  Total Limit (₹)
+                </Label>
+                <Input
+                  id="total-limit"
+                  type="number"
+                  value={newTotalLimitInput}
+                  onChange={(e) => setNewTotalLimitInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleConfirmSetTotalLimit();
+                  }}
+                  className="col-span-3"
+                  placeholder="Enter new total limit"
+                  disabled={isUpdatingTotalLimit}
+                />
+              </div>
+              {totalLimitModalError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{totalLimitModalError}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={handleCloseTotalLimitModal}
+                disabled={isUpdatingTotalLimit}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmSetTotalLimit}
+                disabled={isUpdatingTotalLimit}
+              >
+                {isUpdatingTotalLimit && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                {isUpdatingTotalLimit ? "Saving..." : "Confirm"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {/* --- END NEW --- */}
       </main>
     </div>
   );
