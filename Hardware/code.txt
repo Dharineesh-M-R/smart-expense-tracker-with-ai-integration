@@ -1,0 +1,790 @@
+#include <SPI.h>
+#include <TFT_eSPI.h>
+#include <XPT2046_Touchscreen.h>
+#include <Wire.h>
+#include <Adafruit_PN532.h>
+#include <WiFi.h>
+#include <time.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+
+// ===== Supabase Configuration (Replace with your actual values) =====
+// The base URL for your Supabase project's REST API
+const char* SUPABASE_HOST = "mzmrtjwagznccglnjzpv.supabase.co"; 
+const char* SUPABASE_URL_PREFIX = "/rest/v1/";
+const char* SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16bXJ0andhZ3puY2NnbG5qenB2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5NzEyODEsImV4cCI6MjA3MzU0NzI4MX0.p59eEoVNiXqSuB8Wc71GIO4pAGYf96Ml6rOMv5gCS90";
+
+// ===== Wi-Fi (Replace with your credentials) =====
+const char* ssid = "One Plus"; // Open network, no password
+
+// ===== Touch Pins =====
+#define TOUCH_CS 33
+#define TOUCH_IRQ 25
+XPT2046_Touchscreen ts(TOUCH_CS, TOUCH_IRQ);
+
+// ===== TFT Display =====
+TFT_eSPI tft = TFT_eSPI();
+
+// ===== PN532 NFC (I2C) =====
+Adafruit_PN532 nfc(21, 22);
+
+// ===== Flags & Variables =====
+String amount = "";
+bool createPressed = false;
+bool amountEntered = false;
+bool nfcDone = false;
+bool pinEntered = false;
+bool categorySelected = false;
+String cardUID = "";
+String currentPin = "";
+String cardPin = ""; // Stores the PIN fetched from the card table
+String currentUserID = ""; // Stores the user_id fetched from the card table
+String currentUserName = ""; // Stores the name fetched from the users table
+float currentUserBalance = 0.0; // Stores the user's current balance
+String currentCardID = ""; // <<< NEW: Stores the card's primary key (card_id)
+unsigned long successDisplayStartTime = 0; // For non-blocking delay
+
+// ===== Categories =====
+struct Button {
+    int x, y, w, h;
+    String label;
+    uint16_t color;
+    uint16_t borderColor;
+    uint16_t textColor;
+};
+
+Button categories[] = {
+    {40, 80, 160, 40, "Food", TFT_BLUE, TFT_DARKGREEN, TFT_WHITE},
+    {40, 140, 160, 40, "Travel", TFT_GREEN, TFT_NAVY, TFT_WHITE},
+    {40, 200, 160, 40, "Shopping", TFT_RED, TFT_MAROON, TFT_WHITE}
+};
+
+// ===== Calibration =====
+#define TS_MINX 200
+#define TS_MAXX 3800
+#define TS_MINY 200
+#define TS_MAXY 3800
+
+// Function Prototypes (for clarity)
+void showNumberPad(bool isPinPad = false);
+void checkNumberPad(bool isPinPad = false);
+void showPinPad();
+void checkPinPad();
+void showCategories();
+void showSuccess(String category);
+void showCreateButton();
+void checkCreateButton();
+void readNFC();
+bool getCardAndUserData(); // Fetches card, user data, and performs balance check
+void updateUserBalance(float newBalance); // Handles the PATCH request
+void resetState();
+void checkWifiAndReset();
+void displayDateTime();
+void displayError(String message);
+
+void setup() {
+    Serial.begin(115200);
+
+    // TFT Init
+    tft.init();
+    tft.setRotation(3);
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextSize(2);
+    tft.setTextColor(TFT_WHITE);
+    tft.setCursor(20, 100);
+    tft.println("Connecting to Wi-Fi...");
+
+    // Connect to Wi-Fi
+    WiFi.begin(ssid);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+
+    Serial.println("\nWi-Fi Connected!");
+    tft.fillScreen(TFT_BLACK);
+    tft.setCursor(20, 100);
+    tft.setTextColor(TFT_GREEN);
+    tft.println("Wi-Fi Connected!");
+    delay(1000);
+
+    // Configure time from NTP server and set timezone to IST (UTC+5:30)
+    configTime(19800, 0, "pool.ntp.org", "time.nist.gov");
+    Serial.println("\nWaiting for time");
+    while(!time(nullptr)) {
+        Serial.print(".");
+        delay(100);
+    }
+    Serial.println("Time configured.");
+
+    // Touch Init
+    ts.begin();
+    ts.setRotation(1);
+
+    // NFC Init
+    nfc.begin();
+    if (!nfc.getFirmwareVersion()) {
+        Serial.println("PN532 not found!");
+        while (1);
+    }
+    nfc.SAMConfig();
+
+    // Show Create Payment Button
+    showCreateButton();
+}
+
+void loop() {
+    // Check Wi-Fi connection and reset if needed.
+    checkWifiAndReset();
+
+    // Check if the success screen has been displayed for 10 seconds
+    if (successDisplayStartTime > 0 && millis() - successDisplayStartTime >= 10000) {
+        successDisplayStartTime = 0;
+        resetState();
+        showCreateButton();
+    }
+
+    // Main state machine for the payment process
+    if (!createPressed) {
+        checkCreateButton();
+    } else if (!amountEntered) {
+        checkNumberPad();
+    } else if (!nfcDone) {
+        readNFC();
+    } else if (!pinEntered) {
+        checkPinPad();
+    } else if (!categorySelected) {
+        checkCategoryTouch();
+    }
+
+    // Display time on every loop cycle
+    displayDateTime();
+}
+
+// Resets all state variables to restart the process
+void resetState() {
+    createPressed = false;
+    amountEntered = false;
+    nfcDone = false;
+    pinEntered = false;
+    categorySelected = false;
+    amount = "";
+    currentPin = "";
+    cardUID = "";
+    cardPin = "";
+    currentUserID = "";
+    currentUserName = "";
+    currentUserBalance = 0.0; // <<< RESET BALANCE
+    currentCardID = ""; // <<< NEW: Reset the card_id
+}
+
+// Displays a temporary error message and resets
+void displayError(String message) {
+    tft.fillScreen(TFT_BLACK);
+    tft.setCursor(20, 100);
+    tft.setTextColor(TFT_RED);
+    tft.setTextSize(2);
+    tft.println("ERROR!");
+    tft.println(message);
+    Serial.println("ERROR: " + message);
+    delay(3000); // Display error for 3 seconds
+    resetState();
+    showCreateButton();
+}
+
+// Checks for Wi-Fi connection. If disconnected, it reconnects and resets state.
+void checkWifiAndReset() {
+    if (WiFi.status() != WL_CONNECTED) {
+        tft.fillScreen(TFT_BLACK);
+        tft.setCursor(20, 100);
+        tft.setTextColor(TFT_RED);
+        tft.println("Wi-Fi disconnected!");
+        tft.println("Reconnecting...");
+        
+        Serial.println("Wi-Fi disconnected. Reconnecting...");
+        WiFi.disconnect();
+        WiFi.reconnect();
+        
+        while (WiFi.status() != WL_CONNECTED) {
+            delay(500);
+            Serial.print(".");
+        }
+        
+        Serial.println("\nWi-Fi reconnected!");
+        tft.fillScreen(TFT_BLACK);
+        tft.setCursor(20, 100);
+        tft.setTextColor(TFT_GREEN);
+        tft.println("Wi-Fi reconnected!");
+        delay(1000);
+
+        // Reset all variables to restart the process
+        resetState();
+        showCreateButton();
+    }
+}
+
+// Displays the current date and time in the top right corner
+void displayDateTime() {
+    // Get local time
+    time_t now = time(nullptr);
+    struct tm* timeinfo = localtime(&now);
+
+    // Format time string
+    char timeStr[10];
+    strftime(timeStr, sizeof(timeStr), "%H:%M:%S", timeinfo);
+    
+    // Format date string
+    char dateStr[11];
+    strftime(dateStr, sizeof(dateStr), "%d/%m/%Y", timeinfo);
+
+    // Set text properties and calculate position
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_CYAN, TFT_BLACK); // Set background to black to clear old text
+
+    // Get the width of the text to align it to the right
+    int timeWidth = tft.textWidth(timeStr);
+    int dateWidth = tft.textWidth(dateStr);
+
+    tft.setCursor(tft.width() - timeWidth - 5, 5);
+    tft.print(timeStr);
+
+    tft.setCursor(tft.width() - dateWidth - 5, 15);
+    tft.print(dateStr);
+}
+
+// ===== Create Payment Button =====
+void showCreateButton() {
+    tft.fillScreen(TFT_BLACK);
+    int btnX = 40, btnY = 120, btnW = 220, btnH = 50, radius = 25;
+    tft.fillRoundRect(btnX, btnY, btnW, btnH, radius, TFT_YELLOW);
+    tft.setTextColor(TFT_BLACK);
+    tft.setTextSize(2);
+    // Adjusted text position for centering on the small display
+    int textX = btnX + (btnW / 2) - (tft.textWidth("Create Payment") / 2);
+    int textY = btnY + (btnH / 2) - 8;
+    tft.setCursor(textX, textY);
+    tft.print("Create Payment");
+    displayDateTime();
+}
+
+void checkCreateButton() {
+    if (ts.touched()) {
+        TS_Point p = ts.getPoint();
+        int x = map(p.x, TS_MINX, TS_MAXX, 0, tft.width() - 1);
+        int y = map(p.y, TS_MINY, TS_MAXY, 0, tft.height() - 1);
+        x = constrain(x, 0, tft.width() - 1);
+        y = constrain(y, 0, tft.height() - 1);
+
+        // Check against the button coordinates
+        if (x > 40 && x < 260 && y > 120 && y < 170) {
+            createPressed = true;
+            showNumberPad();
+            delay(300); // Debounce delay
+        }
+    }
+}
+
+// ===== Number Pad & PIN Pad Logic (Combined) =====
+void showNumberPad(bool isPinPad) {
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextSize(2);
+    tft.setTextColor(TFT_WHITE);
+    tft.setCursor(10, 5); // Title position
+    
+    // Display Title
+    if (isPinPad) {
+        tft.print("Enter PIN for: ");
+        tft.setCursor(10, 25);
+        tft.print(currentUserName);
+    } else {
+        tft.print("Enter Amount:");
+    }
+    
+    // Draw Input Box/Line
+    int inputLineY = isPinPad ? 65 : 50;
+    tft.drawFastHLine(30, inputLineY, 200, TFT_WHITE); // Underline for input
+    
+    // Button setup
+    int btnW = 60, btnH = 35; // Reduced button height
+    int startX = 30, startY = isPinPad ? 80 : 80;
+    int padding = 5; // Reduced padding for compactness
+    int num = 1;
+
+    // Draw 1-9 Buttons
+    for (int row = 0; row < 3; row++) {
+        for (int col = 0; col < 3; col++) {
+            int x = startX + col * (btnW + padding);
+            int y = startY + row * (btnH + padding);
+            tft.fillRoundRect(x, y, btnW, btnH, 8, TFT_DARKGREY);
+            tft.setCursor(x + 20, y + 10);
+            tft.setTextColor(TFT_WHITE);
+            tft.setTextSize(2);
+            tft.print(num++);
+        }
+    }
+
+    // OK Button
+    int okY = startY + 3 * (btnH + padding);
+    tft.fillRoundRect(startX, okY, btnW, btnH, 8, TFT_GREEN);
+    tft.setCursor(startX + 18, okY + 10);
+    tft.print("OK");
+
+    // 0 Button
+    tft.fillRoundRect(startX + (btnW + padding), okY, btnW, btnH, 8, TFT_DARKGREY);
+    tft.setCursor(startX + (btnW + padding) + 20, okY + 10);
+    tft.print("0");
+
+    // DEL Button
+    tft.fillRoundRect(startX + 2 * (btnW + padding), okY, btnW, btnH, 8, TFT_RED);
+    tft.setCursor(startX + 2 * (btnW + padding) + 12, okY + 10);
+    tft.print("DEL");
+    displayDateTime();
+}
+
+void checkNumberPad(bool isPinPad) {
+    static unsigned long lastTouch = 0;
+    const int debounceDelay = 300;
+    String* currentInput = isPinPad ? &currentPin : &amount;
+
+    if (ts.touched()) {
+        unsigned long currentTime = millis();
+        if (currentTime - lastTouch < debounceDelay) return;
+        lastTouch = currentTime;
+
+        // Get and map touch point
+        TS_Point p = ts.getPoint();
+        int x = map(p.x, TS_MINX, TS_MAXX, 0, tft.width() - 1);
+        int y = map(p.y, TS_MINY, TS_MAXY, 0, tft.height() - 1);
+        x = constrain(x, 0, tft.width() - 1);
+        y = constrain(y, 0, tft.height() - 1);
+
+        int btnW = 60, btnH = 35;
+        int startX = 30, startY = 80;
+        int padding = 5;
+        int okY = startY + 3 * (btnH + padding);
+        String pressedNumber = "";
+
+        // Check 1-9 buttons
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 3; col++) {
+                int btnX = startX + col * (btnW + padding);
+                int btnY = startY + row * (btnH + padding);
+                if (x > btnX && x < btnX + btnW && y > btnY && y < btnY + btnH) {
+                    pressedNumber = String(row * 3 + col + 1);
+                }
+            }
+        }
+
+        // Check 0 button
+        if (x > startX + (btnW + padding) && x < startX + (btnW + padding) + btnW &&
+            y > okY && y < okY + btnH) {
+            pressedNumber = "0";
+        }
+        
+        // Check OK button
+        if (x > startX && x < startX + btnW && y > okY && y < okY + btnH) {
+            if (isPinPad) {
+                // *** PIN CHECK AGAINST DB-FETCHED PIN ***
+                if (*currentInput == cardPin) { 
+                    pinEntered = true;
+                    showCategories();
+                    delay(300);
+                } else {
+                    // Display "Incorrect PIN!" over the number pad area
+                    tft.fillRect(10, tft.height() - 30, tft.width() - 20, 20, TFT_BLACK);
+                    tft.setCursor(10, tft.height() - 30);
+                    tft.setTextColor(TFT_RED);
+                    tft.setTextSize(2);
+                    tft.print("Incorrect PIN!");
+                    
+                    // Add the desired 3-second (3000ms) delay
+                    delay(3000); 
+
+                    // Clear input and redraw the PIN pad for a new attempt
+                    currentPin = "";
+                    showNumberPad(true);
+                }
+                return;
+            } else {
+                if (amount.length() == 0) return;
+                amountEntered = true;
+                tft.fillScreen(TFT_BLACK);
+                tft.setCursor(20, 20);
+                tft.setTextColor(TFT_WHITE);
+                tft.setTextSize(2);
+                tft.print("Amount: $" + *currentInput);
+                tft.println("\nTap NFC card...");
+                return;
+            }
+        }
+
+        // Check DEL button
+        if (x > startX + 2 * (btnW + padding) && x < startX + 2 * (btnW + padding) + btnW &&
+            y > okY && y < okY + btnH) {
+            if (currentInput->length() > 0) currentInput->remove(currentInput->length() - 1);
+            
+            // Re-draw input display
+            int inputLineY = isPinPad ? 35 : 20; // Adjusted Y for the amount display area
+            tft.fillRect(30, inputLineY, 200, 30, TFT_BLACK);
+            tft.setCursor(30, inputLineY + 5);
+            tft.setTextColor(TFT_YELLOW);
+            tft.setTextSize(3);
+
+            String displayStr = *currentInput;
+            if (isPinPad) {
+                displayStr = "";
+                for (size_t i = 0; i < currentInput->length(); i++) {
+                    displayStr += "*";
+                }
+            }
+            tft.print(displayStr);
+            return;
+        }
+
+        // Handle number input
+        if (pressedNumber != "") {
+            if (isPinPad && currentInput->length() >= 4) return;
+            if (!isPinPad && currentInput->length() >= 10) return;
+            
+            *currentInput += pressedNumber;
+            
+            // Re-draw input display
+            int inputLineY = isPinPad ? 35 : 20; // Adjusted Y for the amount display area
+            tft.fillRect(30, inputLineY, 200, 30, TFT_BLACK);
+            tft.setCursor(30, inputLineY + 5);
+            tft.setTextColor(TFT_YELLOW);
+            tft.setTextSize(3);
+            
+            String displayStr = *currentInput;
+            if (isPinPad) {
+                displayStr = "";
+                for (size_t i = 0; i < currentInput->length(); i++) {
+                    displayStr += "*";
+                }
+            }
+            tft.print(displayStr);
+        }
+    }
+}
+
+void showPinPad() {
+    showNumberPad(true);
+}
+
+void checkPinPad() {
+    checkNumberPad(true);
+}
+
+// ===== Supabase Query Functions =====
+
+/**
+ * @brief Fetches card, user name, and balance from Supabase.
+ * Also performs the initial check if the entered amount is less than the balance.
+ * * @return true if card/user found and balance is sufficient, false otherwise.
+ */
+bool getCardAndUserData() {
+    if (WiFi.status() != WL_CONNECTED) {
+        displayError("Wi-Fi Lost!");
+        return false;
+    }
+
+    // 1. Fetch Card Details (user_id and pin)
+    HTTPClient http;
+    WiFiClientSecure client;
+    client.setInsecure(); // Skip SSL cert verification
+
+    // Filter by nfc_uid and select card_id, user_id, pin
+    String cardUrl = "https://" + String(SUPABASE_HOST) + String(SUPABASE_URL_PREFIX) + "card?nfc_uid=eq." + cardUID + "&select=card_id,user_id,pin&limit=1"; // <<< MODIFIED
+    http.begin(client, cardUrl);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("apikey", SUPABASE_API_KEY);
+    http.addHeader("Authorization", "Bearer " + String(SUPABASE_API_KEY));
+
+    int httpResponseCode = http.GET();
+    String payload = "";
+
+    if (httpResponseCode > 0) {
+        payload = http.getString();
+        Serial.println("Card Response: " + payload);
+        
+        // Simple JSON parsing to get user_id and pin
+        if (payload.length() > 5 && payload != "[]") {
+            // Find "card_id": "..." <<< NEW
+            int cardIdStart = payload.indexOf("\"card_id\":\"") + 11;
+            int cardIdEnd = payload.indexOf("\"", cardIdStart);
+            currentCardID = payload.substring(cardIdStart, cardIdEnd);
+
+            // Find "user_id": "..."
+            int idStart = payload.indexOf("\"user_id\":\"") + 11;
+            int idEnd = payload.indexOf("\"", idStart);
+            currentUserID = payload.substring(idStart, idEnd);
+
+            // Find "pin": "..."
+            int pinStart = payload.indexOf("\"pin\":\"") + 7;
+            int pinEnd = payload.indexOf("\"", pinStart);
+            cardPin = payload.substring(pinStart, pinEnd);
+            
+            http.end();
+        } else {
+            http.end();
+            displayError("Card Not Found!");
+            return false;
+        }
+    } else {
+        http.end();
+        displayError("DB Error: " + String(httpResponseCode));
+        return false;
+    }
+    
+    // 2. Fetch User Name AND BALANCE
+    String userUrl = "https://" + String(SUPABASE_HOST) + String(SUPABASE_URL_PREFIX) + "users?id=eq." + currentUserID + "&select=name,balance&limit=1"; // <<< MODIFIED: Added 'balance'
+    http.begin(client, userUrl);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("apikey", SUPABASE_API_KEY);
+    http.addHeader("Authorization", "Bearer " + String(SUPABASE_API_KEY));
+
+    httpResponseCode = http.GET();
+    
+    if (httpResponseCode > 0) {
+        payload = http.getString();
+        Serial.println("User Response: " + payload);
+        
+        // Simple JSON parsing to get name and balance
+        if (payload.length() > 5 && payload != "[]") {
+            // Find "name": "..."
+            int nameStart = payload.indexOf("\"name\":\"") + 8;
+            int nameEnd = payload.indexOf("\"", nameStart);
+            currentUserName = payload.substring(nameStart, nameEnd);
+            
+            // Find "balance": ...
+            int balanceStart = payload.indexOf("\"balance\":") + 10;
+            int balanceEnd = payload.indexOf(",", balanceStart);
+            if (balanceEnd == -1) balanceEnd = payload.indexOf("]", balanceStart); // Handle case where balance is the last field in the array
+            String balanceStr = payload.substring(balanceStart, balanceEnd);
+            currentUserBalance = balanceStr.toFloat(); // <<< Convert to float
+
+            http.end();
+            
+            // 💥 NEW: BALANCE CHECK 💥
+            float enteredAmount = amount.toFloat();
+            if (enteredAmount > currentUserBalance) {
+                // Display balance error and reset
+                displayError("Insufficient Balance! (Bal: $" + String(currentUserBalance, 2) + ")");
+                return false;
+            }
+
+            return true; // Success
+        } else {
+            http.end();
+            displayError("User Not Found!");
+            return false;
+        }
+    } else {
+        http.end();
+        displayError("DB Error: " + String(httpResponseCode));
+        return false;
+    }
+}
+
+/**
+ * @brief Sends an HTTP PATCH request to update the user's balance in the 'users' table.
+ */
+void updateUserBalance(float newBalance) {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("Error: Wi-Fi disconnected during balance update.");
+        return;
+    }
+    
+    HTTPClient http;
+    WiFiClientSecure client;
+    client.setInsecure(); // Skip SSL cert verification
+
+    // Use a filter to update only the specific user
+    String supabaseUrl = "https://" + String(SUPABASE_HOST) + String(SUPABASE_URL_PREFIX) + "users?id=eq." + currentUserID;
+    http.begin(client, supabaseUrl);
+    
+    // Headers for PATCH
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("apikey", SUPABASE_API_KEY);
+    http.addHeader("Authorization", "Bearer " + String(SUPABASE_API_KEY));
+    http.addHeader("Prefer", "return=minimal"); // Request a minimal response
+
+    // Build JSON body with the new balance (formatted to 2 decimal places)
+    String jsonData = "{\"balance\": " + String(newBalance, 2) + "}";
+
+    // Use sendRequest for the PATCH method
+    int httpResponseCode = http.sendRequest("PATCH", jsonData); 
+
+    if (httpResponseCode > 0) {
+        Serial.println("Balance Update Response Code: " + String(httpResponseCode));
+        Serial.println("Balance updated successfully.");
+    } else {
+        Serial.println("Error updating balance: " + String(httpResponseCode));
+    }
+
+    http.end();
+}
+
+
+// ===== NFC Reader (Modified) =====
+void readNFC() {
+    uint8_t uid[7];
+    uint8_t uidLength;
+
+    if (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength)) {
+        cardUID = "";
+        for (uint8_t i = 0; i < uidLength; i++) {
+            // Format UID as uppercase hex string without separators
+            if (uid[i] < 0x10) cardUID += "0";
+            cardUID += String(uid[i], HEX);
+        }
+        cardUID.toUpperCase();
+        Serial.println("Card UID: " + cardUID);
+
+        tft.fillScreen(TFT_BLACK);
+        tft.setCursor(20, 20);
+        tft.setTextColor(TFT_YELLOW);
+        tft.setTextSize(2);
+        tft.println("Card detected. Checking DB...");
+
+        // *** Check DB for card, user data, and perform balance check ***
+        if (getCardAndUserData()) { // If this is true, the balance is sufficient
+            tft.fillScreen(TFT_BLACK);
+            tft.setCursor(20, 20);
+            tft.setTextColor(TFT_YELLOW);
+            tft.setTextSize(2);
+            tft.println("Welcome: " + currentUserName);
+            tft.println("Amount: $" + amount);
+            tft.print("Balance: $"); 
+            tft.println(String(currentUserBalance, 2)); 
+            tft.println("\nEnter PIN...");
+            delay(1500);
+            
+            nfcDone = true;
+            currentPin = "";
+            showPinPad();
+        } else {
+            // getCardAndUserData() already handles error display and reset
+        }
+    }
+}
+
+// ===== Categories =====
+void showCategories() {
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextSize(2);
+    tft.setTextColor(TFT_WHITE);
+
+    // Center the title
+    tft.setCursor(tft.width()/2 - tft.textWidth("Select Category") / 2, 20);
+    tft.print("Select Category");
+
+    for (int i = 0; i < 3; i++) {
+        // Draw the rounded background
+        tft.fillRoundRect(categories[i].x, categories[i].y, categories[i].w, categories[i].h, 10, categories[i].color);
+        // Draw the rounded border
+        tft.drawRoundRect(categories[i].x, categories[i].y, categories[i].w, categories[i].h, 10, categories[i].borderColor);
+
+        // Center the text within the button
+        tft.setTextColor(categories[i].textColor);
+        tft.setTextSize(2);
+        int textX = categories[i].x + (categories[i].w - tft.textWidth(categories[i].label)) / 2;
+        int textY = categories[i].y + (categories[i].h - 16) / 2; // 16 is approx height of size 2 text
+        tft.setCursor(textX, textY);
+        tft.print(categories[i].label);
+    }
+    displayDateTime();
+}
+
+void checkCategoryTouch() {
+    static unsigned long lastTouch = 0;
+    const int debounceDelay = 300;
+
+    if (ts.touched()) {
+        unsigned long currentTime = millis();
+        if (currentTime - lastTouch < debounceDelay) return;
+        lastTouch = currentTime;
+
+        TS_Point p = ts.getPoint();
+        int x = map(p.x, TS_MINX, TS_MAXX, 0, tft.width() - 1);
+        int y = map(p.y, TS_MINY, TS_MAXY, 0, tft.height() - 1);
+        x = constrain(x, 0, tft.width() - 1);
+        y = constrain(y, 0, tft.height() - 1);
+
+        for (int i = 0; i < 3; i++) {
+            if (x > categories[i].x && x < categories[i].x + categories[i].w &&
+                y > categories[i].y && y < categories[i].y + categories[i].h) {
+                showSuccess(categories[i].label);
+                categorySelected = true;
+            }
+        }
+    }
+}
+
+void showSuccess(String category) {
+    tft.fillScreen(TFT_BLACK);
+    tft.setCursor(20, 100);
+    tft.setTextColor(TFT_GREEN);
+    tft.setTextSize(2);
+    tft.print("User: " + currentUserName); // Display fetched user name
+    tft.setCursor(20, 130);
+    tft.print("Amount: $" + amount);
+    tft.setCursor(20, 160);
+    tft.print(category);
+    tft.println(" Payment Done!");
+
+    // ===== Send Transaction to Supabase (Expense Log) =====
+    if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        WiFiClientSecure client;
+        client.setInsecure(); // Skip SSL cert verification
+
+        String supabaseUrl = "https://" + String(SUPABASE_HOST) + String(SUPABASE_URL_PREFIX) + "transactions";
+        http.begin(client, supabaseUrl);
+
+        // Supabase headers
+        http.addHeader("Content-Type", "application/json");
+        http.addHeader("apikey", SUPABASE_API_KEY);
+        http.addHeader("Authorization", "Bearer " + String(SUPABASE_API_KEY));
+
+        // Build JSON body
+        String jsonData = "{";
+        // *** IMPORTANT: Use the fetched currentUserID ***
+        jsonData += "\"user_id\": \"" + currentUserID + "\","; 
+        jsonData += "\"type\": \"expense\",";
+        jsonData += "\"amount\": " + amount + ",";
+        jsonData += "\"category\": \"" + category + "\",";
+        jsonData += "\"description\": \"NFC Payment\",";
+        jsonData += "\"payment_mode\": \"card\","; // <<< ADDED COMMA
+        jsonData += "\"card_id\": \"" + currentCardID + "\""; // <<< NEW: Add the card_id
+        jsonData += "}";
+
+        int httpResponseCode = http.POST(jsonData);
+
+        if (httpResponseCode > 0) {
+            String response = http.getString();
+            Serial.println("Supabase Transaction Response: " + response);
+
+            // 💥 NEW: Calculate and Update Balance 💥
+            float enteredAmount = amount.toFloat();
+            float newBalance = currentUserBalance - enteredAmount;
+            
+            Serial.println("Transaction successful. New Balance: " + String(newBalance, 2));
+            updateUserBalance(newBalance); // <<< CALL NEW FUNCTION TO PATCH USER TABLE
+
+            // Update success screen with new balance
+            tft.setCursor(20, 190);
+            tft.setTextColor(TFT_CYAN);
+            tft.print("New Balance: $" + String(newBalance, 2));
+            
+        } else {
+            Serial.println("Error sending transaction data: " + String(httpResponseCode));
+        }
+
+        http.end();
+    }
+
+    // Start the 10-second timer
+    successDisplayStartTime = millis();
+    displayDateTime();
+}
